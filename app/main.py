@@ -38,18 +38,7 @@ async def lifespan(_: FastAPI):
         if not db.scalar(select(func.count(Usuario.id))):
             db.add(Usuario(username=config.ADMIN_USER.lower(), nome="Administrador",
                            senha_hash=hash_senha(config.ADMIN_PASSWORD), admin=True))
-            db.add(Usuario(username="portaria", nome="Portaria",
-                           senha_hash=hash_senha(config.PORTARIA_PASSWORD), admin=False))
             db.commit()
-        if not db.scalar(select(func.count(Unidade.id))):
-            try:
-                from migracao.importar import DADOS, importar_registros, importar_unidades
-                if (DADOS / "tblMoradores.json").exists():
-                    importar_unidades(db)
-                    importar_registros(db)
-                    db.commit()
-            except Exception as exc:
-                print(f"Aviso na importação inicial: {exc}")
     yield
 
 
@@ -100,20 +89,8 @@ def render(request: Request, nome: str, user: Usuario | None = None, **ctx):
 _tentativas: dict[str, list[datetime]] = {}
 
 
-@app.get("/index.html", response_class=HTMLResponse)
-def index_html(request: Request, db: Session = Depends(get_db)):
-    uid = request.session.get("uid")
-    user = db.get(Usuario, uid) if uid else None
-    destino = "/painel" if (user and user.ativo) else "/login"
-    return RedirectResponse(destino, status_code=303)
-
-
 @app.get("/login", response_class=HTMLResponse)
-def login_form(request: Request, db: Session = Depends(get_db)):
-    uid = request.session.get("uid")
-    user = db.get(Usuario, uid) if uid else None
-    if user and user.ativo:
-        return RedirectResponse("/painel", status_code=303)
+def login_form(request: Request):
     return render(request, "login.html", erro=None)
 
 
@@ -132,7 +109,7 @@ def login(request: Request, username: str = Form(...), senha: str = Form(...),
     _tentativas.pop(ip, None)
     request.session.clear()
     request.session["uid"] = user.id
-    return RedirectResponse("/painel", status_code=303)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/logout")
@@ -143,7 +120,6 @@ def logout(request: Request):
 
 # ------------------------------------------------------------------- painel
 @app.get("/", response_class=HTMLResponse)
-@app.get("/painel", response_class=HTMLResponse)
 def painel(request: Request, user: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
     hoje = datetime.combine(config.agora().date(), time.min)
     por_tipo = dict(db.execute(
@@ -408,12 +384,12 @@ def registro_saida(rid: int, request: Request, user: Usuario = Depends(usuario_a
 
 
 @app.post("/registros/{rid}/excluir")
-def registro_excluir(rid: int, user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
+def registro_excluir(rid: int, request: Request, user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
     r = db.get(Registro, rid)
     if r:
         db.delete(r)
         db.commit()
-    return RedirectResponse("/registros", status_code=303)
+    return RedirectResponse(request.headers.get("referer") or "/registros", status_code=303)
 
 
 @app.get("/api/unidade/{bloco_apto:path}")

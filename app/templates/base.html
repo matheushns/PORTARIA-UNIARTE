@@ -113,7 +113,7 @@ document.addEventListener('submit', function (e) {
   const f = e.target;
   if (!f.dataset || !f.dataset.confirm) return;
   e.preventDefault();
-  confirmarBs(f.dataset.confirm, f.dataset.confirmBtn).then(function (ok) { if (ok) f.submit(); });
+  confirmarBs(f.dataset.confirm, f.dataset.confirmBtn, f.dataset.confirmDanger === 'true').then(function (ok) { if (ok) f.submit(); });
 });
 
 // Popup de informações importantes da unidade ao clicar em qualquer link com data-unidade="XX/XXX"

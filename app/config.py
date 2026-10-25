@@ -15,7 +15,6 @@ elif DATABASE_URL.startswith("postgresql://"):
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-key")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin1234")
-PORTARIA_PASSWORD = os.getenv("PORTARIA_PASSWORD", "Portaria@2025")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 TZ = ZoneInfo(os.getenv("TIMEZONE", "America/Sao_Paulo"))
 

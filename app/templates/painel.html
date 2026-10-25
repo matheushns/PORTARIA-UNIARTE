@@ -61,6 +61,11 @@
               <form method="post" action="/registros/{{ r.id }}/saida" data-confirm="Confirmar a saída de {{ r.nome or 'este registro' }}?" data-confirm-btn="Registrar saída">
                 <button class="btn btn-sm btn-success"><i class="bi bi-box-arrow-right me-1"></i>Saída</button>
               </form>
+              {% if user.admin %}
+              <form method="post" action="/registros/{{ r.id }}/excluir" class="d-inline ms-1" data-confirm="Excluir definitivamente o registro de entrada de {{ r.nome or 'este registro' }}? Esta ação não pode ser desfeita." data-confirm-btn="Excluir" data-confirm-danger="true">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir registro (somente administrador)"><i class="bi bi-trash"></i></button>
+              </form>
+              {% endif %}
             </td>
           </tr>{% else %}<tr><td colspan="5" class="text-center text-muted py-4">Ninguém registrado no momento.</td></tr>{% endfor %}
         </table>
