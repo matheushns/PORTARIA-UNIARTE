@@ -22,7 +22,7 @@ if (
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-key")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "FRAncisca_0154")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin1234")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 TZ = ZoneInfo(os.getenv("TIMEZONE", "America/Sao_Paulo"))
 
