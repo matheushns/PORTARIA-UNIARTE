@@ -42,10 +42,54 @@ async def lifespan(_: FastAPI):
     yield
 
 
+import json as _json
+import time as _time
+
 app = FastAPI(title="Portaria UNIARTE", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, same_site="lax",
-                   https_only=config.COOKIE_SECURE, max_age=60 * 60 * 12)
+                   https_only=config.COOKIE_SECURE, max_age=60 * 60 * 24 * 30)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
+
+TEMPO_PERSISTENCIA_FECHADO = 3600  # 1 hora (em segundos) após fechar o programa
+
+
+def _arq_sessao_local() -> Path:
+    return Path.cwd() / ".sessao_ativa.json"
+
+
+def _eh_local(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1", "localhost", "testclient")
+
+
+def _salvar_sessao_local(uid: int):
+    try:
+        _arq_sessao_local().write_text(_json.dumps({"uid": uid, "ts": _time.time()}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _ler_sessao_local() -> int | None:
+    arq = _arq_sessao_local()
+    if not arq.exists():
+        return None
+    try:
+        d = _json.loads(arq.read_text(encoding="utf-8"))
+        uid = d.get("uid")
+        ts = float(d.get("ts") or 0)
+        if uid and (_time.time() - ts) <= TEMPO_PERSISTENCIA_FECHADO:
+            return int(uid)
+        arq.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return None
+
+
+def _limpar_sessao_local():
+    try:
+        _arq_sessao_local().unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------- autenticação
@@ -69,9 +113,15 @@ async def _sem_perm(request: Request, exc: SemPermissao):
 
 def usuario_atual(request: Request, db: Session = Depends(get_db)) -> Usuario:
     uid = request.session.get("uid")
+    if not uid and _eh_local(request):
+        uid = _ler_sessao_local()
+        if uid:
+            request.session["uid"] = uid
     user = db.get(Usuario, uid) if uid else None
     if not user or not user.ativo:
         raise NaoAutenticado()
+    if _eh_local(request):
+        _salvar_sessao_local(user.id)
     return user
 
 
@@ -90,7 +140,15 @@ _tentativas: dict[str, list[datetime]] = {}
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_form(request: Request):
+def login_form(request: Request, db: Session = Depends(get_db)):
+    uid = request.session.get("uid") or (_ler_sessao_local() if _eh_local(request) else None)
+    if uid:
+        user = db.get(Usuario, uid)
+        if user and user.ativo:
+            request.session["uid"] = user.id
+            if _eh_local(request):
+                _salvar_sessao_local(user.id)
+            return RedirectResponse("/", status_code=303)
     return render(request, "login.html", erro=None)
 
 
@@ -109,13 +167,22 @@ def login(request: Request, username: str = Form(...), senha: str = Form(...),
     _tentativas.pop(ip, None)
     request.session.clear()
     request.session["uid"] = user.id
+    if _eh_local(request):
+        _salvar_sessao_local(user.id)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/logout")
 def logout(request: Request):
     request.session.clear()
+    if _eh_local(request):
+        _limpar_sessao_local()
     return RedirectResponse("/login", status_code=303)
+
+
+@app.post("/api/sessao/manter")
+def api_manter_sessao(user: Usuario = Depends(usuario_atual)):
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------- painel

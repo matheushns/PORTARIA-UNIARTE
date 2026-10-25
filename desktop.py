@@ -131,7 +131,7 @@ def main():
     fastapi_app = carregar_app()
 
     porta = _porta_livre()
-    url = f"http://127.0.0.1:{porta}/login"
+    url = f"http://127.0.0.1:{porta}/"
 
     config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=porta, log_level="warning")
     servidor = uvicorn.Server(config)
@@ -139,7 +139,10 @@ def main():
     t = threading.Thread(target=servidor.run, daemon=True)
     t.start()
 
-    _aguardar_servidor(url)
+    _aguardar_servidor(f"http://127.0.0.1:{porta}/login")
+
+    pasta_cookies = PASTA_BASE / ".webview_cache"
+    pasta_cookies.mkdir(parents=True, exist_ok=True)
 
     webview.create_window(
         title="Portaria UNIARTE",
@@ -149,7 +152,17 @@ def main():
         min_size=(960, 620),
         text_select=True,
     )
-    webview.start()
+    webview.start(private_mode=False, storage_path=str(pasta_cookies))
+    # Atualiza o carimbo de hora ao fechar a janela para contar 1 hora exata a partir do fechamento
+    arq_sessao = PASTA_BASE / ".sessao_ativa.json"
+    if arq_sessao.exists():
+        try:
+            d = json.loads(arq_sessao.read_text(encoding="utf-8"))
+            if d.get("uid"):
+                d["ts"] = time.time()
+                arq_sessao.write_text(json.dumps(d), encoding="utf-8")
+        except Exception:
+            pass
     servidor.should_exit = True
 
 

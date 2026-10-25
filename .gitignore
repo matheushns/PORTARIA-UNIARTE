@@ -9,3 +9,5 @@ dist/
 *.spec
 app_atualizado/
 .versao_commit
+.sessao_ativa.json
+.webview_cache/

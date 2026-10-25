@@ -368,6 +368,10 @@ document.addEventListener('change', function (e) {
   }
   atualizarRelogio();
   setInterval(atualizarRelogio, 1000);
+  // Mantém a sessão viva continuamente enquanto o programa estiver aberto
+  setInterval(function () {
+    fetch('/api/sessao/manter', { method: 'POST' }).catch(function () {});
+  }, 120000);
 })();
 
 // Menu colapsável mobile (hambúrguer)
