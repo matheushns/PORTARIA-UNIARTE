@@ -11,10 +11,10 @@ import io
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 import zipfile
@@ -44,7 +44,7 @@ def arquivo_versao_commit() -> Path:
 
 
 def arquivo_versao_instalador() -> Path:
-    return pasta_base() / ".versao_instalador"
+    return pasta_base() / ".versao_instalador_ok"
 
 
 def _tupla_versao(v: str) -> tuple[int, ...]:
@@ -84,7 +84,7 @@ def consultar_status_remoto(timeout: float = 5.0) -> dict:
         "commit_local": commit_local[:7] if commit_local else "original",
         "commit_remoto": "",
         "commit_mensagem": "",
-        " commit_data": "",
+        "commit_data": "",
         "tem_atualizacao_codigo": False,
         "versao_instalador_local": versao_inst_local,
         "versao_instalador_remota": versao_inst_local,
@@ -182,25 +182,41 @@ def aplicar_atualizacao_codigo(sha_esperado: str = "") -> dict:
 
 
 def baixar_e_executar_instalador(url_exe: str, nova_versao: str = "") -> dict:
-    """Baixa o Instalador_PortariaUNIARTE_Setup.exe da Release e o inicia."""
+    """Baixa o Instalador_PortariaUNIARTE_Setup.exe da Release, inicia de forma independente e fecha o app atual."""
     if not url_exe:
         return {"ok": False, "mensagem": "Nenhum instalador (.exe) encontrado na Release do GitHub."}
     try:
         req = urllib.request.Request(url_exe, headers=HEADERS)
-        destino = Path(tempfile.gettempdir()) / "Instalador_PortariaUNIARTE_Setup.exe"
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        pasta_tmp = Path(tempfile.gettempdir())
+        destino = pasta_tmp / "Instalador_PortariaUNIARTE_Setup.exe"
+        with urllib.request.urlopen(req, timeout=90) as resp:
             destino.write_bytes(resp.read())
 
+        cmd = [str(destino), "--pasta", str(pasta_base())]
         if nova_versao:
-            try:
-                arquivo_versao_instalador().write_text(nova_versao, encoding="utf-8")
-            except Exception:
-                pass
+            cmd.extend(["--versao", str(nova_versao).lstrip("vV").strip()])
 
-        subprocess.Popen([str(destino)], cwd=str(destino.parent))
+        # Inicia o instalador totalmente desvinculado (sem herdar descritores/arquivos abertos)
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+        )
+        subprocess.Popen(
+            cmd,
+            cwd=str(pasta_tmp),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=flags,
+        )
+
+        # Fecha o programa atual 1.2s depois para liberar todos os arquivos (.exe / .dll) para o instalador
+        if getattr(sys, "frozen", False):
+            threading.Timer(1.2, lambda: os._exit(0)).start()
+
         return {
             "ok": True,
-            "mensagem": "Instalador baixado e iniciado! Siga as instruções na janela do instalador.",
+            "mensagem": "Instalador baixado e iniciado! O programa será fechado para concluir a atualização.",
         }
     except Exception as exc:
         return {"ok": False, "mensagem": f"Erro ao baixar o instalador completo: {exc}"}
