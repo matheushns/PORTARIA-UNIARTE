@@ -6,6 +6,7 @@
   <title>{% block title %}Portaria UNIARTE{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
   <link href="/static/app.css" rel="stylesheet">
   <script>
   // Tema escuro automático das 17h às 07h (horário de Brasília) ou escolha manual do usuário.
@@ -31,15 +32,40 @@
 </head>
 <body>
 {% if user %}
+<header class="mobile-topbar d-md-none d-flex justify-content-between align-items-center px-3 py-2">
+  <a href="/" class="brand text-decoration-none d-flex align-items-center gap-2">
+    <i class="bi bi-shield-lock-fill"></i>
+    <span>Portaria <small class="d-inline ms-1">UNIARTE</small></span>
+  </a>
+  <button type="button" class="btn btn-outline-light btn-sm px-2 py-1" id="btn-menu-mobile" aria-label="Abrir menu" aria-expanded="false">
+    <i class="bi bi-list fs-4 lh-1"></i>
+  </button>
+</header>
+<div class="sidebar-backdrop d-md-none" id="sidebar-backdrop"></div>
 <div class="d-flex">
-  <nav class="sidebar d-flex flex-column p-3">
-    <a href="/" class="brand mb-4 text-decoration-none"><i class="bi bi-shield-lock-fill"></i> Portaria <small>UNIARTE</small></a>
+  <nav class="sidebar d-flex flex-column p-3" id="sidebar">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <a href="/" class="brand text-decoration-none"><i class="bi bi-shield-lock-fill"></i> Portaria <small>UNIARTE</small></a>
+      <button type="button" class="btn btn-sm btn-outline-light d-md-none" id="btn-fechar-mobile" aria-label="Fechar menu"><i class="bi bi-x-lg"></i></button>
+    </div>
     <ul class="nav nav-pills flex-column gap-1 mb-auto">
       <li><a class="nav-link {{ 'active' if pagina=='painel' }}" href="/"><i class="bi bi-speedometer2"></i> Painel</a></li>
       <li><a class="nav-link {{ 'active' if pagina=='registros' }}" href="/registros"><i class="bi bi-door-open"></i> Acessos</a></li>
       <li><a class="nav-link {{ 'active' if pagina=='unidades' }}" href="/unidades"><i class="bi bi-buildings"></i> Moradores</a></li>
       {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='usuarios' }}" href="/usuarios"><i class="bi bi-people"></i> Usuários</a></li>{% endif %}
     </ul>
+    <div class="sidebar-actions d-flex flex-column gap-2 mb-2">
+      <div class="text-uppercase text-white-50 fw-semibold px-1" style="font-size: .68rem; letter-spacing: .08em;">Registrar Entrada</div>
+      <a href="/registros/novo?tipo=VISITANTE" class="btn btn-primary py-2 px-3 fw-semibold d-flex align-items-center gap-2 shadow-sm text-start">
+        <i class="bi bi-person-plus-fill fs-5"></i> <span>Visitante</span>
+      </a>
+      <a href="/registros/novo?tipo=PRESTADOR" class="btn btn-warning py-2 px-3 fw-semibold d-flex align-items-center gap-2 shadow-sm text-dark text-start">
+        <i class="bi bi-tools fs-5"></i> <span>Prestador</span>
+      </a>
+      <a href="/registros/novo?tipo=ENTREGA" class="btn btn-info py-2 px-3 fw-semibold d-flex align-items-center gap-2 shadow-sm text-dark text-start">
+        <i class="bi bi-box-seam-fill fs-5"></i> <span>Entrega</span>
+      </a>
+    </div>
     <hr>
     <div class="sidebar-clock text-center py-2 px-2 mb-2 rounded-3" style="background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.12);">
       <div class="fw-bold text-white lh-1" style="font-size: 1.75rem; font-variant-numeric: tabular-nums; letter-spacing: .03em;" id="relogio-hora">--:--:--</div>
@@ -58,6 +84,12 @@
 {% else %}
   {% block bare %}{% endblock %}
 {% endif %}
+<div id="tela-carregando" class="loading-overlay" aria-hidden="true">
+  <div class="loading-box text-center p-4 rounded-4 shadow-lg">
+    <div class="spinner-border text-primary mb-3" style="width: 2.75rem; height: 2.75rem; border-width: .3em;" role="status"></div>
+    <div class="fw-bold fs-6" id="tela-carregando-texto">Carregando...</div>
+  </div>
+</div>
 <div class="modal fade" id="modalConfirmar" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -108,12 +140,88 @@ window.confirmarBs = function (texto, rotulo, perigo) {
     modal.show();
   });
 };
+window.mostrarCarregando = function (msg) {
+  const el = document.getElementById('tela-carregando');
+  const txt = document.getElementById('tela-carregando-texto');
+  if (txt && msg) txt.textContent = msg;
+  if (el) el.classList.add('ativo');
+};
+window.ocultarCarregando = function () {
+  const el = document.getElementById('tela-carregando');
+  if (el) el.classList.remove('ativo');
+};
+window.addEventListener('pageshow', window.ocultarCarregando);
+
+function frasePorFormulario(f) {
+  const act = f.getAttribute('action') || location.pathname;
+  const met = (f.getAttribute('method') || 'get').toLowerCase();
+  if (met === 'get') {
+    return act.includes('/unidades') ? 'Buscando moradores...' : 'Filtrando acessos...';
+  }
+  if (act.includes('/login')) return 'Entrando no sistema...';
+  if (act.includes('/logout')) return 'Encerrando sessão...';
+  if (act.includes('/saida')) return 'Registrando saída...';
+  if (act.includes('/excluir')) return 'Excluindo registro...';
+  if (act.includes('/unidades/salvar') || act.includes('/registros/salvar')) return 'Finalizando cadastro...';
+  if (act.includes('/usuarios/salvar')) return 'Salvando usuário...';
+  return 'Finalizando cadastro...';
+}
+
+function frasePorLink(href) {
+  if (href === '/' || href.startsWith('/painel')) return 'Abrindo Painel de Controle...';
+  if (href.startsWith('/registros/novo')) {
+    if (href.includes('PRESTADOR')) return 'Abrindo cadastro de prestador...';
+    if (href.includes('ENTREGA')) return 'Abrindo cadastro de entrega...';
+    return 'Abrindo cadastro de visitante...';
+  }
+  if (/^\/registros\/\d+/.test(href)) return 'Abrindo registro de acesso...';
+  if (href.startsWith('/registros')) return 'Carregando Acessos...';
+  if (href.startsWith('/unidades/nova')) return 'Abrindo novo cadastro de unidade...';
+  if (/^\/unidades\/\d+/.test(href)) return 'Abrindo cadastro da unidade...';
+  if (href.startsWith('/unidades')) return 'Carregando Moradores...';
+  if (href.startsWith('/usuarios')) return 'Carregando Usuários...';
+  if (href.startsWith('?')) return 'Carregando registros...';
+  return 'Carregando...';
+}
+
 // Qualquer <form data-confirm="texto" data-confirm-btn="rótulo"> pede confirmação em um modal Bootstrap.
 document.addEventListener('submit', function (e) {
   const f = e.target;
-  if (!f.dataset || !f.dataset.confirm) return;
-  e.preventDefault();
-  confirmarBs(f.dataset.confirm, f.dataset.confirmBtn, f.dataset.confirmDanger === 'true').then(function (ok) { if (ok) f.submit(); });
+  if (f.dataset && f.dataset.confirm) {
+    e.preventDefault();
+    confirmarBs(f.dataset.confirm, f.dataset.confirmBtn, f.dataset.confirmDanger === 'true').then(function (ok) {
+      if (ok) {
+        window.mostrarCarregando(frasePorFormulario(f));
+        f.submit();
+      }
+    });
+    return;
+  }
+  if (!e.defaultPrevented && (!f.checkValidity || f.checkValidity())) {
+    window.mostrarCarregando(frasePorFormulario(f));
+  }
+});
+
+// Mostrar tela de carregamento ao navegar em links internos ou clicar em linhas com onclick="location=..."
+document.addEventListener('click', function (e) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest('a[href]');
+  if (a) {
+    const href = a.getAttribute('href') || '';
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('data-unidade') || a.hasAttribute('data-bs-toggle')) return;
+    window.mostrarCarregando(frasePorLink(href));
+    return;
+  }
+  const tr = e.target.closest('tr[onclick*="location"]');
+  if (tr) {
+    window.mostrarCarregando('Abrindo cadastro da unidade...');
+  }
+});
+
+// Mostrar tela de carregamento em selects que disparam submit automático (ex.: filtros Bloco/Apto)
+document.addEventListener('change', function (e) {
+  const sel = e.target.closest('select[onchange*="submit"]');
+  if (sel) window.mostrarCarregando('Filtrando moradores...');
 });
 
 // Popup de informações importantes da unidade ao clicar em qualquer link com data-unidade="XX/XXX"
@@ -239,6 +347,23 @@ document.addEventListener('submit', function (e) {
   }
   atualizarRelogio();
   setInterval(atualizarRelogio, 1000);
+})();
+
+// Menu colapsável mobile (hambúrguer)
+(function () {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const btnAbrir = document.getElementById('btn-menu-mobile');
+  const btnFechar = document.getElementById('btn-fechar-mobile');
+  if (!sidebar || !btnAbrir) return;
+  function definirMenu(aberto) {
+    sidebar.classList.toggle('aberta', aberto);
+    if (backdrop) backdrop.classList.toggle('visivel', aberto);
+    btnAbrir.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+  }
+  btnAbrir.addEventListener('click', () => definirMenu(!sidebar.classList.contains('aberta')));
+  if (btnFechar) btnFechar.addEventListener('click', () => definirMenu(false));
+  if (backdrop) backdrop.addEventListener('click', () => definirMenu(false));
 })();
 </script>
 <script src="/static/mask.js"></script>

@@ -4,3 +4,8 @@ migracao/dados/
 __pycache__/
 .venv/
 *.pyc
+build/
+dist/
+*.spec
+app_atualizado/
+.versao_commit

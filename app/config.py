@@ -11,6 +11,14 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+if (
+    DATABASE_URL.startswith("postgresql+psycopg://")
+    and "sslmode=" not in DATABASE_URL
+    and "localhost" not in DATABASE_URL
+    and "127.0.0.1" not in DATABASE_URL
+):
+    sep = "&" if "?" in DATABASE_URL else "?"
+    DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-key")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
