@@ -71,8 +71,12 @@
       <div class="fw-bold text-white lh-1" style="font-size: 1.75rem; font-variant-numeric: tabular-nums; letter-spacing: .03em;" id="relogio-hora">--:--:--</div>
       <div class="small text-white-50 mt-1" style="font-size: .78rem;" id="relogio-data">--/--/----</div>
     </div>
-    <div class="d-flex gap-1 mb-2">
-      <button type="button" id="btn-tema" class="btn btn-sm btn-outline-light flex-grow-1 text-start"></button>
+    <div class="d-flex flex-column gap-1 mb-2">
+      <button type="button" id="btn-tema" class="btn btn-sm btn-outline-light w-100 text-start"></button>
+      <button type="button" id="btn-atualizar" class="btn btn-sm btn-outline-light w-100 text-start d-flex justify-content-between align-items-center" title="Verificar atualizações do sistema e do instalador">
+        <span><i class="bi bi-cloud-arrow-down-fill text-info"></i> <span class="ms-1">Atualizações</span></span>
+        <span id="badge-atualizacao" class="badge rounded-pill text-bg-warning d-none">Nova!</span>
+      </button>
     </div>
     <form method="post" action="/logout" class="d-flex justify-content-between align-items-center">
       <span class="small text-white-50"><i class="bi bi-person-circle"></i> {{ user.nome or user.username }}</span>
@@ -99,6 +103,23 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-success" id="modalConfirmarOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="modalAtualizacoes" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cloud-arrow-down-fill text-primary me-1"></i> Central de Atualizações</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="maCorpo">
+        <div class="text-center text-muted py-3">Verificando atualizações no servidor...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-primary btn-sm me-auto" id="btn-reverificar"><i class="bi bi-arrow-clockwise"></i> Verificar novamente</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
       </div>
     </div>
   </div>
@@ -364,6 +385,127 @@ document.addEventListener('change', function (e) {
   btnAbrir.addEventListener('click', () => definirMenu(!sidebar.classList.contains('aberta')));
   if (btnFechar) btnFechar.addEventListener('click', () => definirMenu(false));
   if (backdrop) backdrop.addEventListener('click', () => definirMenu(false));
+})();
+
+// Central de Atualizações (Automática de Código/Telas + Instalador Completo .EXE)
+(function () {
+  const btn = document.getElementById('btn-atualizar');
+  const badge = document.getElementById('badge-atualizacao');
+  const modalEl = document.getElementById('modalAtualizacoes');
+  const corpo = document.getElementById('maCorpo');
+  const btnRev = document.getElementById('btn-reverificar');
+  if (!btn || !modalEl) return;
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+  function renderStatus(d) {
+    if (!d || !d.ok) {
+      corpo.innerHTML = '<div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i> ' + (d && d.erro ? d.erro : 'Não foi possível verificar no momento.') + '</div>';
+      return;
+    }
+    const temAlguma = d.tem_atualizacao_codigo || d.tem_atualizacao_instalador;
+    badge.classList.toggle('d-none', !temAlguma);
+
+    let html = '';
+    // Bloco 1: Atualização Rápida (Código / Telas)
+    html += '<div class="card p-3 mb-3 border ' + (d.tem_atualizacao_codigo ? 'border-primary' : '') + '">';
+    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+    html += '<span class="fw-bold"><i class="bi bi-lightning-charge-fill text-warning me-1"></i> Atualização Automática (Telas e Sistema)</span>';
+    html += d.tem_atualizacao_codigo
+      ? '<span class="badge text-bg-primary">Disponível</span>'
+      : '<span class="badge text-bg-success">Atualizado</span>';
+    html += '</div>';
+    html += '<div class="small text-muted mb-2">Versão instalada: <code>' + (d.commit_local || '—') + '</code> · Servidor: <code>' + (d.commit_remoto || '—') + '</code>' + (d.commit_mensagem ? '<br>Última alteração: <i>' + d.commit_mensagem + '</i>' : '') + '</div>';
+    html += '<div class="d-flex gap-2">';
+    html += '<button type="button" class="btn btn-sm ' + (d.tem_atualizacao_codigo ? 'btn-primary' : 'btn-outline-secondary') + '" id="btn-aplicar-codigo">'
+          + '<i class="bi bi-download me-1"></i> ' + (d.tem_atualizacao_codigo ? 'Baixar e Atualizar Agora' : 'Reaplicar última versão do servidor') + '</button>';
+    html += '</div></div>';
+
+    // Bloco 2: Atualizador do Instalador Completo (.EXE)
+    html += '<div class="card p-3 border ' + (d.tem_atualizacao_instalador ? 'border-info' : '') + '">';
+    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+    html += '<span class="fw-bold"><i class="bi bi-box-seam-fill text-info me-1"></i> Instalador Completo (.EXE)</span>';
+    html += d.tem_atualizacao_instalador
+      ? '<span class="badge text-bg-info">Nova versão v' + d.versao_instalador_remota + '</span>'
+      : '<span class="badge text-bg-success">v' + (d.versao_instalador_local || '1.0.0') + ' (Atual)</span>';
+    html += '</div>';
+    html += '<div class="small text-muted mb-2">Versão local do programa: <b>v' + (d.versao_instalador_local || '1.0.0') + '</b> · Última versão publicada: <b>v' + (d.versao_instalador_remota || '1.0.0') + '</b></div>';
+    if (d.instalador_url) {
+      html += '<div><button type="button" class="btn btn-sm ' + (d.tem_atualizacao_instalador ? 'btn-info text-dark fw-semibold' : 'btn-outline-secondary') + '" id="btn-baixar-instalador" data-url="' + d.instalador_url + '" data-versao="' + d.versao_instalador_remota + '">'
+            + '<i class="bi bi-windows me-1"></i> ' + (d.tem_atualizacao_instalador ? 'Baixar e Instalar Nova Versão Completa' : 'Reinstalar pacote completo (.exe)') + '</button></div>';
+    } else {
+      html += '<div class="small text-muted"><i class="bi bi-check2-circle text-success"></i> Nenhum novo instalador completo pendente.</div>';
+    }
+    html += '</div>';
+
+    corpo.innerHTML = html;
+
+    const btnCod = document.getElementById('btn-aplicar-codigo');
+    if (btnCod) {
+      btnCod.addEventListener('click', async function () {
+        btnCod.disabled = true;
+        btnCod.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Atualizando sistema...';
+        try {
+          const r = await (await fetch('/api/atualizacoes/aplicar-codigo', { method: 'POST' })).json();
+          corpo.innerHTML = '<div class="alert alert-' + (r.ok ? 'success' : 'danger') + ' mb-0">' + r.mensagem + '</div>';
+          if (r.ok) setTimeout(() => location.reload(), 1200);
+        } catch (e) {
+          corpo.innerHTML = '<div class="alert alert-danger mb-0">Erro ao aplicar atualização.</div>';
+        }
+      });
+    }
+
+    const btnInst = document.getElementById('btn-baixar-instalador');
+    if (btnInst) {
+      btnInst.addEventListener('click', async function () {
+        btnInst.disabled = true;
+        btnInst.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Baixando instalador (.exe)...';
+        try {
+          const fd = new FormData();
+          fd.append('url', btnInst.dataset.url || '');
+          fd.append('versao', btnInst.dataset.versao || '');
+          const r = await (await fetch('/api/atualizacoes/baixar-instalador', { method: 'POST', body: fd })).json();
+          corpo.innerHTML = '<div class="alert alert-' + (r.ok ? 'success' : 'danger') + ' mb-0">' + r.mensagem + '</div>';
+        } catch (e) {
+          corpo.innerHTML = '<div class="alert alert-danger mb-0">Erro ao baixar instalador completo.</div>';
+        }
+      });
+    }
+  }
+
+  async function verificar(abrirModalSeHouver) {
+    try {
+      const d = await (await fetch('/api/atualizacoes/verificar')).json();
+      renderStatus(d);
+      if (abrirModalSeHouver && (d.tem_atualizacao_codigo || d.tem_atualizacao_instalador)) {
+        modal.show();
+      }
+    } catch (e) {
+      renderStatus({ ok: false, erro: 'Sem conexão com o servidor de atualizações.' });
+    }
+  }
+
+  btn.addEventListener('click', function () {
+    corpo.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Verificando atualizações no GitHub...</div>';
+    modal.show();
+    verificar(false);
+  });
+
+  if (btnRev) {
+    btnRev.addEventListener('click', function () {
+      corpo.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Verificando atualizações no GitHub...</div>';
+      verificar(false);
+    });
+  }
+
+  // Verificação inicial automática ao entrar no sistema (1 vez por sessão de navegador)
+  try {
+    if (!sessionStorage.getItem('verificouAtualizacaoInicial')) {
+      sessionStorage.setItem('verificouAtualizacaoInicial', '1');
+      setTimeout(() => verificar(true), 1200);
+    } else {
+      setTimeout(() => verificar(false), 2000);
+    }
+  } catch (e) {}
 })();
 </script>
 <script src="/static/mask.js"></script>

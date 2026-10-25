@@ -443,3 +443,26 @@ def usuario_salvar(request: Request, username: str = Form(...), nome: str = Form
     db.add(alvo)
     db.commit()
     return RedirectResponse("/usuarios", status_code=303)
+
+
+# --------------------------------------------------------------- atualizações
+@app.get("/api/atualizacoes/verificar")
+def api_verificar_atualizacoes(user: Usuario = Depends(usuario_atual)):
+    from .updater import consultar_status_remoto
+    return consultar_status_remoto(timeout=5.0)
+
+
+@app.post("/api/atualizacoes/aplicar-codigo")
+def api_aplicar_codigo(user: Usuario = Depends(usuario_atual)):
+    from .updater import aplicar_atualizacao_codigo
+    return aplicar_atualizacao_codigo()
+
+
+@app.post("/api/atualizacoes/baixar-instalador")
+def api_baixar_instalador(url: str = Form(""), versao: str = Form(""), user: Usuario = Depends(usuario_atual)):
+    from .updater import baixar_e_executar_instalador, consultar_status_remoto
+    if not url:
+        st = consultar_status_remoto(timeout=6.0)
+        url = st.get("instalador_url", "")
+        versao = st.get("versao_instalador_remota", "")
+    return baixar_e_executar_instalador(url, versao)
