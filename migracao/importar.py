@@ -96,12 +96,23 @@ def importar_unidades(db):
             if apto:
                 print(f"  ! duplicada ignorada: {apto}")
             continue
+        bloco_num = apto.partition("/")[0]
+        if bloco_num in ("16", "17", "18"):
+            continue
         vistos.add(apto)
+        eh_inq = b(r.get("Inquilino"))
+        inq_nome = inq_cpf = inq_rg = inq_tel = ""
+        if eh_inq and s(r.get("Nome")):
+            inq_nome, _, _ = extrair_obs(s(r.get("Nome")))
+            inq_cpf = s(r.get("CPF 1"))
+            inq_rg = s(r.get("RG 1"))
+            inq_tel = s(r.get("Telefone 1"))
         u = Unidade(
-            bloco_apto=apto, ativo=b(r.get("Ativo")), inquilino=b(r.get("Inquilino")),
-            proprietario=s(r.get("Proprietário")), cpf=s(r.get("CPF")), rg=s(r.get("RG")),
+            bloco_apto=apto, ativo=True, inquilino=eh_inq,
+            proprietario=s(r.get("Proprietário")).upper(), cpf=s(r.get("CPF")), rg=s(r.get("RG")),
             telefone=s(r.get("Telefone")), tel_residencial=s(r.get("Tel Residencial")),
             email=s(r.get("E-Mail")), observacoes=s(r.get("Observações")),
+            inquilino_nome=inq_nome.upper(), inquilino_cpf=inq_cpf, inquilino_rg=inq_rg, inquilino_telefone=inq_tel,
             senha=s(r.get("Senha")), panico=s(r.get("Pânico")), entrada_senha=s(r.get("Entradasenha")),
             entrada_panico=s(r.get("EntradaPânico")), numero_vaga=s(r.get("Número da Vaga")),
             piso=s(r.get("Piso")), cobertura=b(r.get("Cobertura")), pne=b(r.get("PNE")), pcd=b(r.get("PCD")),
@@ -111,10 +122,12 @@ def importar_unidades(db):
         )
         # Moradores/inquilinos: Nome, Nome 2..4 com CPF/RG/Telefone 1..4
         for i, suf in enumerate(["", " 2", " 3", " 4"], start=1):
+            if eh_inq and i == 1:
+                continue
             nome = s(r.get("Nome" + suf))
             if nome:
                 nome, par, lib = extrair_obs(nome)
-                u.pessoas.append(Pessoa(tipo="MORADOR", nome=nome, cpf=s(r.get(f"CPF {i}")),
+                u.pessoas.append(Pessoa(tipo="MORADOR", nome=nome.upper(), cpf=s(r.get(f"CPF {i}")),
                                         rg=s(r.get(f"RG {i}")), telefone=s(r.get(f"Telefone {i}")),
                                         parentesco=par, liberacao=lib))
         # Autorizados 1..3 -> CPF 5..7 / Telefone 5..7 ; Diarista -> CPF 8 / Telefone 8

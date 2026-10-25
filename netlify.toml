@@ -1,0 +1,10 @@
+[build]
+  publish = "."
+
+# Caso utilize o Netlify como domínio de fachada (proxy) apontando para o servidor Python (Render / Railway / Fly.io),
+# substitua https://SEU-SERVIDOR-BACKEND.onrender.com pela URL real do seu servidor Python:
+# [[redirects]]
+#   from = "/*"
+#   to = "https://SEU-SERVIDOR-BACKEND.onrender.com/:splat"
+#   status = 200
+#   force = true

@@ -38,7 +38,18 @@ async def lifespan(_: FastAPI):
         if not db.scalar(select(func.count(Usuario.id))):
             db.add(Usuario(username=config.ADMIN_USER.lower(), nome="Administrador",
                            senha_hash=hash_senha(config.ADMIN_PASSWORD), admin=True))
+            db.add(Usuario(username="portaria", nome="Portaria",
+                           senha_hash=hash_senha(config.PORTARIA_PASSWORD), admin=False))
             db.commit()
+        if not db.scalar(select(func.count(Unidade.id))):
+            try:
+                from migracao.importar import DADOS, importar_registros, importar_unidades
+                if (DADOS / "tblMoradores.json").exists():
+                    importar_unidades(db)
+                    importar_registros(db)
+                    db.commit()
+            except Exception as exc:
+                print(f"Aviso na importação inicial: {exc}")
     yield
 
 
