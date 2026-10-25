@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import urllib.request
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
@@ -30,15 +31,19 @@ GITHUB_BRANCH = "master"
 
 
 def verificar_e_atualizar():
-    """Consulta o último commit no GitHub e atualiza a pasta `app_atualizado/app` se houver novidade."""
+    """Consulta o último commit no GitHub via feed Atom (sem rate limit de API) e atualiza `app_atualizado/app`."""
     try:
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{GITHUB_REPO}/commits/{GITHUB_BRANCH}",
-            headers={"User-Agent": "PortariaUNIARTE-Updater/1.0", "Accept": "application/vnd.github.v3+json"},
+            f"https://github.com/{GITHUB_REPO}/commits/{GITHUB_BRANCH}.atom",
+            headers={"User-Agent": "Mozilla/5.0 PortariaUNIARTE-Updater/1.1"},
         )
         with urllib.request.urlopen(req, timeout=4) as resp:
-            dados = json.loads(resp.read().decode("utf-8"))
-            sha_remoto = dados.get("sha", "")
+            xml_bytes = resp.read()
+        root = ET.fromstring(xml_bytes)
+        ns = {"a": "http://www.w3.org/2005/Atom"}
+        entry = root.find("a:entry", ns)
+        id_el = entry.find("a:id", ns) if entry is not None else None
+        sha_remoto = id_el.text.strip().rsplit("/", 1)[-1] if (id_el is not None and id_el.text) else ""
         if not sha_remoto:
             return
 

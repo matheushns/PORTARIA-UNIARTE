@@ -476,9 +476,9 @@ document.addEventListener('change', function (e) {
     }
   }
 
-  async function verificar(abrirModalSeHouver) {
+  async function verificar(abrirModalSeHouver, forcar) {
     try {
-      const d = await (await fetch('/api/atualizacoes/verificar')).json();
+      const d = await (await fetch('/api/atualizacoes/verificar' + (forcar ? '?forcar=1' : ''))).json();
       renderStatus(d);
       if (abrirModalSeHouver && (d.tem_atualizacao_codigo || d.tem_atualizacao_instalador)) {
         modal.show();
@@ -491,13 +491,13 @@ document.addEventListener('change', function (e) {
   btn.addEventListener('click', function () {
     corpo.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Verificando atualizações no GitHub...</div>';
     modal.show();
-    verificar(false);
+    verificar(false, true);
   });
 
   if (btnRev) {
     btnRev.addEventListener('click', function () {
       corpo.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Verificando atualizações no GitHub...</div>';
-      verificar(false);
+      verificar(false, true);
     });
   }
 

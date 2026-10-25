@@ -514,9 +514,9 @@ def usuario_salvar(request: Request, username: str = Form(...), nome: str = Form
 
 # --------------------------------------------------------------- atualizações
 @app.get("/api/atualizacoes/verificar")
-def api_verificar_atualizacoes(user: Usuario = Depends(usuario_atual)):
+def api_verificar_atualizacoes(forcar: bool = False, user: Usuario = Depends(usuario_atual)):
     from .updater import consultar_status_remoto
-    st = consultar_status_remoto(timeout=5.0)
+    st = consultar_status_remoto(timeout=5.0, forcar=forcar)
     if not user.admin:
         st["commit_mensagem"] = ""
     return st

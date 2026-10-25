@@ -1,32 +1,35 @@
 """Gerenciador de Atualizações Remotas (Portaria UNIARTE).
 
 Suporta duas modalidades de atualização via GitHub (matheushns/PORTARIA-UNIARTE):
-1. Atualização Rápida (Código/Telas): verifica o último commit da branch `master` e baixa
-   a pasta `app/` atualizada sem precisar reinstalar o executável.
+1. Atualização Rápida (Código/Telas): verifica o último commit da branch `master` via feed Atom
+   direto do GitHub (sem limite de 60 requisições/hora da API) e baixa a pasta `app/` atualizada.
 2. Atualização do Instalador Completo (.exe): verifica a última Release publicada no GitHub
-   (`releases/latest`) e, se a tag for superior à VERSAO_INSTALADOR local, permite baixar
-   e iniciar o `Instalador_PortariaUNIARTE_Setup.exe` automaticamente.
+   (`releases/latest`) e, se a tag for superior à versão local, baixa e inicia o
+   `Instalador_PortariaUNIARTE_Setup.exe` automaticamente.
 """
 import io
-import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-VERSAO_INSTALADOR = "1.0.0"
+VERSAO_INSTALADOR = "1.1.2"
 GITHUB_REPO = "matheushns/PORTARIA-UNIARTE"
 GITHUB_BRANCH = "master"
 HEADERS = {
-    "User-Agent": "PortariaUNIARTE-Updater/1.0",
-    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PortariaUNIARTE-Updater/1.1",
 }
+
+_CACHE_STATUS: dict = {"ts": 0.0, "dados": None}
+_CACHE_TTL = 180.0  # 3 minutos para checagens automáticas de fundo
 
 
 def pasta_base() -> Path:
@@ -68,14 +71,64 @@ def obter_commit_local() -> str:
     return ""
 
 
-def _get_json(url: str, timeout: float = 5.0) -> dict | None:
+def _obter_ultimo_commit_atom(timeout: float = 5.0) -> tuple[str, str]:
+    """Obtém (sha, mensagem) do último commit via feed Atom público (sem rate limit de API)."""
+    url = f"https://github.com/{GITHUB_REPO}/commits/{GITHUB_BRANCH}.atom"
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        xml_bytes = resp.read()
+    root = ET.fromstring(xml_bytes)
+    ns = {"a": "http://www.w3.org/2005/Atom"}
+    entry = root.find("a:entry", ns)
+    if entry is None:
+        return "", ""
+    id_el = entry.find("a:id", ns)
+    title_el = entry.find("a:title", ns)
+    sha = id_el.text.strip().rsplit("/", 1)[-1] if (id_el is not None and id_el.text) else ""
+    msg = title_el.text.strip().splitlines()[0] if (title_el is not None and title_el.text) else ""
+    return sha, msg
 
 
-def consultar_status_remoto(timeout: float = 5.0) -> dict:
+def _obter_ultima_release_web(timeout: float = 5.0) -> tuple[str, str]:
+    """Obtém (tag, url_exe) da última Release via redirecionamento web (sem rate limit de API)."""
+    url_latest = f"https://github.com/{GITHUB_REPO}/releases/latest"
+    req = urllib.request.Request(url_latest, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        url_final = resp.geturl()
+
+    # Se não houver nenhuma release publicada, o GitHub redireciona para /releases
+    if "/releases/tag/" not in url_final:
+        return "", ""
+
+    tag_bruta = url_final.rsplit("/releases/tag/", 1)[-1].split("?")[0].split("#")[0].strip()
+    if not tag_bruta:
+        return "", ""
+
+    # Busca link do .exe em expanded_assets/<tag_bruta>
+    url_exe = ""
+    try:
+        url_assets = f"https://github.com/{GITHUB_REPO}/releases/expanded_assets/{tag_bruta}"
+        req_a = urllib.request.Request(url_assets, headers=HEADERS)
+        with urllib.request.urlopen(req_a, timeout=timeout) as resp_a:
+            html_a = resp_a.read().decode("utf-8", errors="ignore")
+        m = re.search(r'href=["\'](/[^"\']+?/releases/download/[^"\']+?\.exe)["\']', html_a, re.IGNORECASE)
+        if m:
+            url_exe = "https://github.com" + m.group(1)
+    except Exception:
+        pass
+
+    if not url_exe:
+        url_exe = f"https://github.com/{GITHUB_REPO}/releases/download/{tag_bruta}/Instalador_PortariaUNIARTE_Setup.exe"
+
+    return tag_bruta.lstrip("vV").strip(), url_exe
+
+
+def consultar_status_remoto(timeout: float = 5.0, forcar: bool = False) -> dict:
     """Retorna informações sobre atualizações disponíveis (código e instalador completo)."""
+    agora = time.time()
+    if not forcar and _CACHE_STATUS["dados"] is not None and (agora - _CACHE_STATUS["ts"] < _CACHE_TTL):
+        return dict(_CACHE_STATUS["dados"])
+
     commit_local = obter_commit_local()
     versao_inst_local = obter_versao_instalador_local()
 
@@ -93,17 +146,14 @@ def consultar_status_remoto(timeout: float = 5.0) -> dict:
         "tem_atualizacao_instalador": False,
     }
 
-    # 1. Consulta último commit da branch master
+    # 1. Consulta último commit da branch master (via Atom feed - sem bloqueio 403 de rate limit)
     try:
-        dados_c = _get_json(f"https://api.github.com/repos/{GITHUB_REPO}/commits/{GITHUB_BRANCH}", timeout=timeout)
-        if dados_c and dados_c.get("sha"):
-            sha = dados_c["sha"]
+        sha, msg = _obter_ultimo_commit_atom(timeout=timeout)
+        if sha:
             out["commit_remoto"] = sha[:7]
             out["commit_sha_completo"] = sha
-            commit_info = dados_c.get("commit") or {}
-            out["commit_mensagem"] = (commit_info.get("message") or "").splitlines()[0]
+            out["commit_mensagem"] = msg
             if not commit_local:
-                # Primeira execução: registra o commit atual como base caso já esteja sincronizado
                 arquivo_versao_commit().write_text(sha, encoding="utf-8")
                 out["commit_local"] = sha[:7]
             elif sha != commit_local:
@@ -112,26 +162,20 @@ def consultar_status_remoto(timeout: float = 5.0) -> dict:
         out["ok"] = False
         out["erro"] = f"Não foi possível consultar o GitHub: {exc}"
 
-    # 2. Consulta última Release para instalador completo (.exe)
+    # 2. Consulta última Release para instalador completo (.exe) (via web redirect - sem bloqueio 403)
     try:
-        dados_r = _get_json(f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest", timeout=timeout)
-        if dados_r and dados_r.get("tag_name"):
-            tag = dados_r["tag_name"].lstrip("vV").strip()
+        tag, url_exe = _obter_ultima_release_web(timeout=timeout)
+        if tag:
             out["versao_instalador_remota"] = tag
-            out["instalador_notas"] = dados_r.get("body") or dados_r.get("name") or ""
-            for asset in dados_r.get("assets") or []:
-                nome = (asset.get("name") or "").lower()
-                if nome.endswith(".exe"):
-                    out["instalador_url"] = asset.get("browser_download_url") or ""
-                    break
-            if _tupla_versao(tag) > _tupla_versao(versao_inst_local) and out["instalador_url"]:
+            out["instalador_url"] = url_exe
+            if _tupla_versao(tag) > _tupla_versao(versao_inst_local) and url_exe:
                 out["tem_atualizacao_instalador"] = True
-    except urllib.error.HTTPError as e:
-        # 404 significa que ainda não há nenhuma Release publicada no repositório (normal)
-        if e.code != 404:
-            pass
     except Exception:
         pass
+
+    if out["ok"]:
+        _CACHE_STATUS["ts"] = agora
+        _CACHE_STATUS["dados"] = dict(out)
 
     return out
 
@@ -140,7 +184,7 @@ def aplicar_atualizacao_codigo(sha_esperado: str = "") -> dict:
     """Baixa o zip da branch master e atualiza `app/` local."""
     try:
         if not sha_esperado:
-            st = consultar_status_remoto(timeout=6.0)
+            st = consultar_status_remoto(timeout=6.0, forcar=True)
             sha_esperado = st.get("commit_sha_completo", "")
 
         url_zip = f"https://github.com/{GITHUB_REPO}/archive/refs/heads/{GITHUB_BRANCH}.zip"
@@ -150,7 +194,6 @@ def aplicar_atualizacao_codigo(sha_esperado: str = "") -> dict:
 
         base = pasta_base()
         alvos = [base / "app_atualizado" / "app"]
-        # Se estiver rodando direto na pasta de código ou _internal existir, atualiza também templates/static
         internal_app = base / "_internal" / "app"
         if internal_app.exists():
             alvos.append(internal_app)
@@ -172,6 +215,9 @@ def aplicar_atualizacao_codigo(sha_esperado: str = "") -> dict:
 
         if sha_esperado:
             arquivo_versao_commit().write_text(sha_esperado, encoding="utf-8")
+
+        _CACHE_STATUS["ts"] = 0.0
+        _CACHE_STATUS["dados"] = None
 
         return {
             "ok": True,
