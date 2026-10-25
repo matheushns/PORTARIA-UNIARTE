@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% macro campo(nome, rotulo, valor, cols='col-md-4', extra='') %}
+<div class="{{ cols }}"><label class="form-label small mb-0">{{ rotulo }}</label>
+<input class="form-control form-control-sm" name="{{ nome }}" value="{{ valor or '' }}" {{ extra|safe }}></div>
+{% endmacro %}
+{% macro check(nome, rotulo, valor) %}
+<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="{{ nome }}" id="{{ nome }}" {{ 'checked' if valor }}>
+<label class="form-check-label" for="{{ nome }}">{{ rotulo }}</label></div>
+{% endmacro %}
+{% macro sel(nome, rotulo, valor, opcoes, cols) %}
+<div class="{{ cols }}"><label class="form-label small mb-0">{{ rotulo }}</label>
+<select class="form-select form-select-sm" name="{{ nome }}"><option value="">—</option>
+{% for o in opcoes %}<option value="{{ o }}" {{ 'selected' if valor == o }}>{{ o }}</option>{% endfor %}
+{% if valor and valor not in opcoes %}<option value="{{ valor }}" selected>{{ valor }}</option>{% endif %}
+</select></div>
+{% endmacro %}
+{% macro linha_pessoa(tipo, i, p) %}
+<div class="row g-1 mb-1 linha align-items-end">
+  {% if tipo == 'DIARISTA' %}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_nome','Nome',p.nome if p,'col-md-5') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_cpf','CPF',p.cpf if p,'col-md-3') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_rg','RG',p.rg if p,'col-md') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_telefone','Telefone',p.telefone if p,'col-md-2') }}
+  {% else %}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_nome','Nome',p.nome if p,'col-md-3') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_cpf','CPF',p.cpf if p,'col-md-2') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_rg','RG',p.rg if p,'col-md') }}
+  {{ campo('p_' ~ tipo ~ '_' ~ i ~ '_telefone','Telefone',p.telefone if p,'col-md-2') }}
+  {{ sel('p_' ~ tipo ~ '_' ~ i ~ '_parentesco','Parentesco',p.parentesco if p,PARENTESCOS,'col-md') }}
+  {{ sel('p_' ~ tipo ~ '_' ~ i ~ '_liberacao','Liberação',p.liberacao if p,LIBERACOES,'col-md-2') }}
+  {% endif %}
+  <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-danger btn-rem" title="Remover linha"><i class="bi bi-x-lg"></i></button></div>
+</div>
+{% endmacro %}
+{% macro linha_veiculo(i, v) %}
+<div class="row g-2 mb-1 linha align-items-end">
+  {{ campo('v_' ~ i ~ '_modelo','Veículo',v.modelo if v,'col-md-4') }}{{ campo('v_' ~ i ~ '_cor','Cor',v.cor if v,'col-md-3') }}{{ campo('v_' ~ i ~ '_placa','Placa',v.placa if v,'col-md-3') }}
+  <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-danger btn-rem" title="Remover linha"><i class="bi bi-x-lg"></i></button></div>
+</div>
+{% endmacro %}
+{% macro grupo_pessoas(tipo, titulo, lista, max=6) %}
+{% set itens = lista|select|list %}
+<div class="grupo mb-2" data-max="{{ max }}" data-tpl="tpl-{{ tipo }}">
+  <div class="d-flex align-items-center mb-1"><h6 class="mb-0">{{ titulo }}</h6>
+    <small class="contador text-muted ms-2"></small>
+    <button type="button" class="btn btn-sm btn-outline-primary ms-auto btn-add"><i class="bi bi-plus-lg"></i> Adicionar</button></div>
+  <div class="linhas">
+    {% for p in (itens if itens else [none]) %}{{ linha_pessoa(tipo, loop.index0, p) }}{% endfor %}
+  </div>
+  <template id="tpl-{{ tipo }}">{{ linha_pessoa(tipo, '__i__', none) }}</template>
+</div>
+{% endmacro %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/unidades" class="btn btn-outline-secondary btn-sm" title="Voltar para Moradores"><i class="bi bi-arrow-left"></i> Voltar</a>
+  <h3 class="mb-0">{{ 'Unidade ' ~ u.bloco_apto if u.id else 'Nova unidade' }}</h3>
+</div>
+{% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+<form method="post" action="/unidades/salvar">
+  {% if u.id %}<input type="hidden" name="id" value="{{ u.id }}">{% endif %}
+  <div class="card p-3 mb-3"><h6>Proprietário</h6><div class="row g-2">
+    <div class="col-md-2"><label class="form-label small mb-0">Bloco / Apto</label>
+      <div class="input-group input-group-sm">
+        <select id="sel_bloco" class="form-select" required aria-label="Bloco">
+          <option value="">Bloco</option>
+          {% for n in range(1, 16) %}{% set b = '%02d' % n %}<option value="{{ b }}" {{ 'selected' if (u.bloco_apto or '')[:2] == b }}>{{ b }}</option>{% endfor %}
+        </select>
+        {% set apto_atual = (u.bloco_apto or '').partition('/')[2] %}
+        <select id="inp_apto" class="form-select" required aria-label="Apartamento">
+          <option value="">Apto</option>
+          {% for a in APTOS_PADRAO %}<option value="{{ a }}" {{ 'selected' if apto_atual == a }}>{{ a }}</option>{% endfor %}
+          {% if apto_atual and apto_atual not in APTOS_PADRAO %}<option value="{{ apto_atual }}" selected>{{ apto_atual }}</option>{% endif %}
+        </select>
+      </div>
+      <input type="hidden" name="bloco_apto" id="bloco_apto" value="{{ u.bloco_apto or '' }}"></div>
+    <div class="col-12 d-none" id="aviso-duplicada">
+      <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-0">
+        <span><i class="bi bi-exclamation-triangle-fill"></i> Já existe um cadastro para <b id="aviso-apto"></b><span id="aviso-prop" class="text-muted"></span>.</span>
+        <a href="#" id="aviso-link" class="btn btn-sm btn-warning">Ir para o cadastro existente <i class="bi bi-arrow-right"></i></a>
+      </div>
+    </div>
+    {{ campo('proprietario','Proprietário *',u.proprietario,'col-md-6','required') }}
+    {{ campo('cpf','CPF *',u.cpf,'col-md-2','required') }}{{ campo('rg','RG',u.rg,'col-md-2') }}
+    {{ campo('telefone','Telefone *',u.telefone,'col-md-3','required') }}{{ campo('tel_residencial','Tel. residencial',u.tel_residencial,'col-md-3') }}
+    {{ campo('email','E-mail',u.email,'col-md-6') }}
+    <div class="col-12">{{ check('ativo','Ativo',u.ativo) }}{{ check('inquilino','Possui inquilino',u.inquilino) }}</div>
+    <div class="col-12"><label class="form-label small mb-0">Observações</label><textarea class="form-control form-control-sm" name="observacoes" rows="2">{{ u.observacoes or '' }}</textarea></div>
+  </div></div>
+
+  <div class="card p-3 mb-3 border-start border-info border-4 {{ '' if u.inquilino else 'd-none' }}" id="secao-inquilino">
+    <h6 class="text-info-emphasis"><i class="bi bi-person-check-fill me-1"></i> Inquilino (Contato Principal)</h6>
+    <div class="row g-2">
+      {{ campo('inquilino_nome','Inquilino *',u.inquilino_nome,'col-md-8') }}
+      {{ campo('inquilino_cpf','CPF *',u.inquilino_cpf,'col-md-2') }}{{ campo('inquilino_rg','RG',u.inquilino_rg,'col-md-2') }}
+      {{ campo('inquilino_telefone','Telefone *',u.inquilino_telefone,'col-md-3') }}{{ campo('inquilino_tel_residencial','Tel. residencial',u.inquilino_tel_residencial,'col-md-3') }}
+      {{ campo('inquilino_email','E-mail',u.inquilino_email,'col-md-6') }}
+      <div class="col-12"><label class="form-label small mb-0">Observações do inquilino</label><textarea class="form-control form-control-sm" name="inquilino_observacoes" rows="2">{{ u.inquilino_observacoes or '' }}</textarea></div>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">{{ grupo_pessoas('MORADOR', 'Moradores / Inquilinos', pessoas['MORADOR']) }}</div>
+  <div class="card p-3 mb-3">{{ grupo_pessoas('AUTORIZADO', 'Autorizados', pessoas['AUTORIZADO']) }}
+    <hr>{{ grupo_pessoas('DIARISTA', 'Diarista', pessoas['DIARISTA']) }}
+  </div>
+  <div class="card p-3 mb-3">
+    {% set vitens = veiculos|select|list %}
+    <div class="grupo mb-2" data-max="6" data-tpl="tpl-VEICULO">
+      <div class="d-flex align-items-center mb-1"><h6 class="mb-0">Veículos e vaga</h6>
+        <small class="contador text-muted ms-2"></small>
+        <button type="button" class="btn btn-sm btn-outline-primary ms-auto btn-add"><i class="bi bi-plus-lg"></i> Adicionar veículo</button></div>
+      <div class="linhas">
+        {% for v in (vitens if vitens else [none]) %}{{ linha_veiculo(loop.index0, v) }}{% endfor %}
+      </div>
+      <template id="tpl-VEICULO">{{ linha_veiculo('__i__', none) }}</template>
+    </div>
+    <div class="row g-2 mt-1">{{ campo('numero_vaga','Nº da vaga',u.numero_vaga,'col-md-3') }}{{ campo('piso','Piso',u.piso,'col-md-3') }}
+      <div class="col-md-6 pt-3">{{ check('cobertura','Cobertura',u.cobertura) }}{{ check('pne','PNE',u.pne) }}{{ check('pcd','PCD',u.pcd) }}</div></div>
+  </div>
+  <div class="card p-3 mb-3"><h6>Senhas e interfone</h6><div class="row g-2">
+    {{ campo('senha','Senha',u.senha,'col-md-3') }}{{ campo('panico','Pânico',u.panico,'col-md-3') }}
+    {{ campo('entrada_senha','Entrada senha',u.entrada_senha,'col-md-3') }}{{ campo('entrada_panico','Entrada pânico',u.entrada_panico,'col-md-3') }}
+    {{ campo('interfonar_1','Interfonar 1',u.interfonar_1,'col-md-3') }}{{ campo('interfonar_2','Interfonar 2',u.interfonar_2,'col-md-3') }}
+    {{ campo('interfonar_3','Interfonar 3',u.interfonar_3,'col-md-3') }}{{ campo('interfonar_4','Interfonar 4',u.interfonar_4,'col-md-3') }}
+  </div></div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" id="btn-salvar"><i class="bi bi-check-lg"></i> Salvar</button>
+    <a href="/unidades" class="btn btn-outline-secondary">Cancelar</a>
+    {% if u.id and user.admin %}<button class="btn btn-outline-danger ms-auto" formaction="/unidades/{{ u.id }}/excluir" formnovalidate id="btn-excluir-unidade">Excluir</button>{% endif %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+// Bloco (combo 01-15) + apartamento (3 dígitos) compõem o campo Bloco/Apto "00/000".
+const selB = document.getElementById('sel_bloco'), inpA = document.getElementById('inp_apto'), hid = document.getElementById('bloco_apto');
+function compoe() { hid.value = (selB.value && inpA.value) ? selB.value + '/' + inpA.value : ''; }
+const idAtual = {{ u.id or 'null' }};
+const aviso = document.getElementById('aviso-duplicada'), btnSalvar = document.getElementById('btn-salvar');
+let seq = 0;
+// Verifica assim que bloco e apartamento (3 dígitos) estiverem completos, sem esperar os demais campos.
+async function verifica() {
+  const minha = ++seq;
+  const v = hid.value;
+  if (!/^\d{2}\/\d{3}$/.test(v)) { aviso.classList.add('d-none'); btnSalvar.disabled = false; return; }
+  try {
+    const d = await (await fetch('/api/unidade/' + encodeURIComponent(v))).json();
+    if (minha !== seq) return; // resposta antiga
+    const duplicada = d.encontrada && d.id !== idAtual;
+    aviso.classList.toggle('d-none', !duplicada);
+    btnSalvar.disabled = duplicada;
+    if (duplicada) {
+      document.getElementById('aviso-apto').textContent = v;
+      document.getElementById('aviso-prop').textContent = d.proprietario ? ' (' + d.proprietario + ')' : '';
+      document.getElementById('aviso-link').href = '/unidades/' + d.id;
+    }
+  } catch (e) { /* offline: o servidor ainda valida ao salvar */ }
+}
+selB.addEventListener('change', () => { compoe(); verifica(); verifica(); });
+inpA.addEventListener('change', () => { compoe(); verifica(); verifica(); });
+const bloco0 = (hid.value || '').slice(0, 2);
+if (bloco0 && !selB.value) selB.add(new Option(bloco0, bloco0, true, true)); // bloco fora de 01-15 (dado antigo)
+compoe(); verifica();
+
+// Botão WhatsApp ao lado de cada campo Telefone: abre a conversa direto (wa.me).
+const DDD_PADRAO = '34'; // usado quando o número tem 9 dígitos, sem DDD
+function linkWhats(valor) {
+  let d = (valor || '').replace(/\D/g, '');
+  if (d.length === 9 && d[0] === '9') d = DDD_PADRAO + d;          // 9XXXXXXXX
+  if (d.length === 10 || d.length === 11) d = '55' + d;            // DDD + número
+  const celular = d.length === 13 && d.startsWith('55') && d[4] === '9';
+  const fixoComDdd = d.length === 12 && d.startsWith('55');        // fixo não tem WhatsApp
+  return celular && !fixoComDdd ? 'https://wa.me/' + d : null;
+}
+window.ligaWhats = function (raiz) {
+  raiz.querySelectorAll('input[name$="telefone"]').forEach(inp => {
+    if (inp.closest('.input-group')) return;
+    const grupo = document.createElement('div');
+    grupo.className = 'input-group input-group-sm';
+    inp.parentNode.insertBefore(grupo, inp);
+    grupo.appendChild(inp);
+    inp.classList.remove('form-control-sm');
+    const a = document.createElement('a');
+    a.className = 'btn btn-success';
+    a.target = '_blank'; a.rel = 'noopener';
+    a.innerHTML = '<i class="bi bi-whatsapp"></i>';
+    grupo.appendChild(a);
+    const atualiza = () => {
+      const url = linkWhats(inp.value);
+      if (url) { a.href = url; a.classList.remove('disabled'); a.removeAttribute('aria-disabled'); a.title = 'Conversar no WhatsApp'; }
+      else { a.removeAttribute('href'); a.classList.add('disabled'); a.setAttribute('aria-disabled', 'true'); a.title = 'Informe um celular válido para abrir o WhatsApp'; }
+    };
+    inp.addEventListener('input', atualiza);
+    atualiza();
+  });
+};
+ligaWhats(document);
+
+// Linhas dinâmicas (Moradores, Autorizados, Diarista, Veículos): começa com 1 linha, até o máximo do grupo.
+document.querySelectorAll('.grupo').forEach(g => {
+  const max = +g.dataset.max, linhas = g.querySelector('.linhas'), tpl = document.getElementById(g.dataset.tpl);
+  const btnAdd = g.querySelector('.btn-add'), contador = g.querySelector('.contador');
+  const indiceDe = l => +l.querySelector('input').name.match(/_(\d+)_[a-z]+$/)[1];
+  function atualiza() {
+    const n = linhas.querySelectorAll('.linha').length;
+    contador.textContent = n + '/' + max;
+    btnAdd.disabled = n >= max;
+    btnAdd.title = n >= max ? 'Limite de ' + max + ' atingido' : '';
+  }
+  btnAdd.addEventListener('click', () => {
+    const usados = [...linhas.querySelectorAll('.linha')].map(indiceDe);
+    let i = 0; while (usados.includes(i)) i++;
+    if (i >= max) return;
+    const el = document.createElement('div');
+    el.innerHTML = tpl.innerHTML.replaceAll('__i__', i);
+    const nova = el.querySelector('.linha');
+    linhas.appendChild(nova);
+    if (window.aplicarMascaras) window.aplicarMascaras(nova);
+    ligaWhats(nova);
+    nova.querySelector('input').focus();
+    atualiza();
+  });
+  linhas.addEventListener('click', async e => {
+    const b = e.target.closest('.btn-rem'); if (!b) return;
+    const linha = b.closest('.linha');
+    const inputs = [...linha.querySelectorAll('input, select')];
+    const temInfo = inputs.some(x => x.value.trim() !== '');
+    if (temInfo) {
+      // Confirmação dupla: só remove se as duas etapas forem confirmadas.
+      const resumo = inputs.map(x => x.value.trim()).filter(Boolean).join(' · ');
+      const c1 = await confirmarBs('Remover as informações desta linha?\n' + resumo, 'Continuar', false);
+      if (!c1) return;
+      const c2 = await confirmarBs('Tem certeza? A informação será excluída definitivamente ao salvar o cadastro.', 'Sim, excluir', true);
+      if (!c2) return;
+    }
+    if (linhas.querySelectorAll('.linha').length === 1) inputs.forEach(x => x.value = '');
+    else linha.remove();
+    atualiza();
+  });
+  atualiza();
+});
+
+
+// Mostrar/ocultar seção Inquilino ao marcar/desmarcar "Possui inquilino"
+(function () {
+  const chkInq = document.getElementById('inquilino');
+  const secInq = document.getElementById('secao-inquilino');
+  if (chkInq && secInq) {
+    const reqInq = () => {
+      ['inquilino_nome', 'inquilino_cpf', 'inquilino_telefone'].forEach(n => {
+        const el = secInq.querySelector(`input[name="${n}"]`);
+        if (el) el.required = chkInq.checked;
+      });
+    };
+    chkInq.addEventListener('change', () => {
+      secInq.classList.toggle('d-none', !chkInq.checked);
+      reqInq();
+      if (chkInq.checked) {
+        const inp = secInq.querySelector('input[name="inquilino_nome"]');
+        if (inp) inp.focus();
+      }
+    });
+    reqInq();
+  }
+})();
+
+const btnExcUni = document.getElementById('btn-excluir-unidade');
+if (btnExcUni) {
+  btnExcUni.addEventListener('click', async function (e) {
+    e.preventDefault();
+    if (await confirmarBs('Tem certeza que deseja excluir o cadastro desta unidade?', 'Sim, excluir', true)) {
+      const f = this.closest('form');
+      f.action = this.getAttribute('formaction');
+      f.submit();
+    }
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% macro campo(nome, rotulo, valor, cols='col-md-4', extra='') %}
+<div class="{{ cols }}"><label class="form-label small mb-0">{{ rotulo }}</label>
+<input class="form-control" name="{{ nome }}" id="{{ nome }}" value="{{ valor or '' }}" {{ extra|safe }}></div>
+{% endmacro %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/registros" class="btn btn-outline-secondary btn-sm" title="Voltar para Acessos"><i class="bi bi-arrow-left"></i> Voltar</a>
+  <h3 class="mb-0">{{ 'Editar acesso' if r.id else 'Novo acesso' }}</h3>
+</div>
+{% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+<form method="post" action="/registros/salvar" class="card p-3">
+  {% if r.id %}<input type="hidden" name="id" value="{{ r.id }}">{% endif %}
+  <div class="row g-3">
+    <div class="col-md-3"><label class="form-label small mb-0">Tipo</label>
+      <select name="tipo" class="form-select">{% for k,v in TIPOS_REGISTRO.items() %}<option value="{{ k }}" {{ 'selected' if r.tipo==k }}>{{ v }}</option>{% endfor %}</select></div>
+    {{ campo('entrada','Entrada',r.entrada.strftime('%Y-%m-%dT%H:%M') if r.entrada,'col-md-3','type="datetime-local"') }}
+    {{ campo('saida','Saída',r.saida.strftime('%Y-%m-%dT%H:%M') if r.saida,'col-md-3','type="datetime-local"') }}
+    <div class="col-md-3"><label class="form-label small mb-0">Bloco / Apartamento</label>
+      <div class="input-group">
+        <select id="sel_bloco" class="form-select" required aria-label="Bloco">
+          <option value="">Bloco</option>
+          {% for b in blocos %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+        </select>
+        <select id="sel_apto" class="form-select" required disabled aria-label="Apartamento">
+          <option value="">Apto</option>
+        </select>
+      </div>
+      <input type="hidden" name="bloco_apto" id="bloco_apto" value="{{ r.bloco_apto or '' }}"></div>
+    <div class="col-12"><div id="info-unidade" class="alert alert-info py-2 d-none mb-0"></div></div>
+    {{ campo('nome','Nome *',r.nome,'col-md-5','required autofocus') }}
+    {{ campo('cpf','CPF *',r.cpf,'col-md-3','required') }}{{ campo('rg','RG',r.rg,'col-md-2') }}{{ campo('telefone','Telefone *',r.telefone,'col-md-2','required') }}
+    {{ campo('empresa','Empresa',r.empresa,'col-md-4') }}{{ campo('veiculo','Veículo',r.veiculo,'col-md-4') }}{{ campo('placa','Placa',r.placa,'col-md-4') }}
+    <div class="col-12"><label class="form-label small mb-0">Observações</label><textarea name="observacoes" class="form-control" rows="2">{{ r.observacoes or '' }}</textarea></div>
+    <div class="col-12"><div class="small text-muted"><i class="bi bi-person-badge"></i> Autorizado por — Porteiro(a): <strong>{{ r.autorizado_por or user.nome or user.username }}</strong></div></div>
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+    <a href="/registros" class="btn btn-outline-secondary">Cancelar</a>
+    {% if r.id and user.admin %}<button class="btn btn-outline-danger ms-auto" formaction="/registros/{{ r.id }}/excluir" formnovalidate id="btn-excluir-registro">Excluir</button>{% endif %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const campoApto = document.getElementById('bloco_apto'), info = document.getElementById('info-unidade');
+async function consulta() {
+  const v = campoApto.value.trim();
+  if (!v) { info.classList.add('d-none'); return; }
+  const r = await fetch('/api/unidade/' + encodeURIComponent(v));
+  const d = await r.json();
+  if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada.'; return; }
+  info.className = 'alert alert-info py-2 mb-0';
+  const aut = d.pessoas.filter(p => p.tipo !== 'DIARISTA').map(p => p.nome + ([p.parentesco, p.liberacao].filter(Boolean).length ? ' (' + [p.parentesco, p.liberacao].filter(Boolean).join(' · ') + ')' : '')).join(', ');
+  const resp = d.inquilino ? ('Inquilino: ' + (d.inquilino_nome || '—')) : ('Proprietário: ' + (d.proprietario || '—'));
+  const obs = [d.inquilino ? d.inquilino_observacoes : '', d.observacoes].filter(Boolean).join(' | ');
+  info.innerHTML = '<a href="#" data-unidade="' + v + '" class="btn btn-sm btn-outline-primary float-end"><i class="bi bi-eye"></i> Ver detalhes</a><b>' + resp + '</b>' + (d.ativo ? '' : ' <span class="badge text-bg-warning">inativo</span>') +
+    (aut ? '<br><small>Pessoas: ' + aut + '</small>' : '') + (obs ? '<br><small>Obs.: ' + obs + '</small>' : '');
+}
+
+// Combos encadeados: o apartamento só é carregado depois de escolher o bloco.
+const MAPA = {{ blocos|tojson }};
+const selBloco = document.getElementById('sel_bloco'), selApto = document.getElementById('sel_apto');
+function carregaAptos(bloco, aptoSel) {
+  selApto.innerHTML = '<option value="">Apto</option>';
+  const lista = MAPA[bloco] || [];
+  lista.forEach(a => selApto.add(new Option(a, a)));
+  if (aptoSel && !lista.includes(aptoSel)) selApto.add(new Option(aptoSel, aptoSel)); // valor antigo fora do cadastro
+  selApto.disabled = !bloco;
+  selApto.value = aptoSel || '';
+}
+function atualiza() {
+  campoApto.value = (selBloco.value && selApto.value) ? selBloco.value + '/' + selApto.value : '';
+  consulta();
+}
+selBloco.addEventListener('change', () => { carregaAptos(selBloco.value, ''); atualiza(); });
+selApto.addEventListener('change', atualiza);
+const [b0, a0] = (campoApto.value || '').split('/');
+if (b0) {
+  if (!MAPA[b0]) selBloco.add(new Option(b0, b0));
+  selBloco.value = b0; carregaAptos(b0, a0);
+}
+consulta();
+
+const btnExcReg = document.getElementById('btn-excluir-registro');
+if (btnExcReg) {
+  btnExcReg.addEventListener('click', async function (e) {
+    e.preventDefault();
+    if (await confirmarBs('Tem certeza que deseja excluir este registro de acesso?', 'Sim, excluir', true)) {
+      const f = this.closest('form');
+      f.action = this.getAttribute('formaction');
+      f.submit();
+    }
+  });
+}
+</script>
+{% endblock %}

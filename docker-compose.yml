@@ -1,0 +1,26 @@
+# Servidor: docker compose up -d   (requer arquivo .env com SECRET_KEY, ADMIN_PASSWORD, DB_PASSWORD)
+# Coloque um proxy HTTPS (Caddy/Nginx) na frente da porta 8000 e use COOKIE_SECURE=true.
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: portaria
+      POSTGRES_USER: portaria
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  web:
+    build: .
+    restart: always
+    depends_on: [db]
+    environment:
+      DATABASE_URL: postgresql+psycopg://portaria:${DB_PASSWORD}@db:5432/portaria
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    ports:
+      - "8000:8000"
+volumes:
+  pgdata:

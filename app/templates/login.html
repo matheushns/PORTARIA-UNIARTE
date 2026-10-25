@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Entrar - Portaria UNIARTE{% endblock %}
+{% block bare %}
+<div class="login-wrap">
+  <form method="post" action="/login" class="card p-4" style="width:360px">
+    <h4 class="text-center mb-1"><i class="bi bi-shield-lock-fill text-primary"></i> Portaria UNIARTE</h4>
+    <p class="text-center text-muted small">Controle de acesso</p>
+    {% if erro %}<div class="alert alert-danger py-2">{{ erro }}</div>{% endif %}
+    <label class="form-label">Usuário</label>
+    <input name="username" class="form-control mb-3" autofocus required autocomplete="username">
+    <label class="form-label">Senha</label>
+    <input name="senha" type="password" class="form-control mb-3" required autocomplete="current-password">
+    <button class="btn btn-primary w-100">Entrar</button>
+  </form>
+</div>
+{% endblock %}

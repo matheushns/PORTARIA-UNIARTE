@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h3 class="mb-0">Moradores <small class="text-muted fs-6">({{ lista|length }} unidades)</small></h3>
+    <small class="text-muted">Clique no número do apartamento para editar ou na lupa <i class="bi bi-eye"></i> ao lado para ver o resumo rápido</small>
+  </div>
+  <div class="d-flex gap-2">
+    <div class="btn-group" role="group" aria-label="Modo de visualização">
+      <button type="button" class="btn btn-outline-secondary active" id="btn-modo-mapa" title="Visão por blocos"><i class="bi bi-grid-3x3-gap-fill"></i> Blocos</button>
+      <button type="button" class="btn btn-outline-secondary" id="btn-modo-lista" title="Visão em lista"><i class="bi bi-list-ul"></i> Lista</button>
+    </div>
+    <a href="/unidades/nova" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nova unidade</a>
+  </div>
+</div>
+
+<form class="mb-3"><div class="input-group">
+  <span class="input-group-text"><i class="bi bi-building me-1"></i>Bloco</span>
+  <select name="bloco" class="form-select" style="max-width:110px" onchange="this.form.submit()">
+    <option value="">Todos</option>
+    {% for b in blocos_lista %}<option value="{{ b }}" {% if bloco == b %}selected{% endif %}>{{ b }}</option>{% endfor %}
+  </select>
+  <span class="input-group-text"><i class="bi bi-door-open me-1"></i>Apto</span>
+  <select name="apto" class="form-select" style="max-width:110px" onchange="this.form.submit()">
+    <option value="">Todos</option>
+    {% for a in APTOS_PADRAO %}<option value="{{ a }}" {% if apto == a %}selected{% endif %}>{{ a }}</option>{% endfor %}
+  </select>
+  <input name="q" id="filtro-rapido" value="{{ q }}" class="form-control" placeholder="Buscar por nome, CPF ou placa..." autofocus>
+  {% if q or bloco or apto %}<a href="/unidades" class="btn btn-outline-secondary" title="Limpar filtros"><i class="bi bi-x-lg"></i></a>{% endif %}
+  <button class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+</div></form>
+
+<div class="d-flex flex-wrap gap-3 small text-muted mb-3">
+  <span><span class="badge rounded-pill" style="background:#f8fafd;color:#1e3a5f;border:1px solid #d7e0ec">101</span> Proprietário</span>
+  <span><span class="badge rounded-pill" style="background:#eefbff;color:#1e3a5f;border:1px solid #0dcaf0">101</span> Alugado (Inquilino)</span>
+  <span><span class="badge rounded-pill" style="background:#fcfdff;color:#6c7a89;border:1px dashed #d7e0ec">101</span> Não cadastrado (clique para cadastrar)</span>
+</div>
+
+<div id="visao-mapa" class="row g-3">
+  {% for b, itens in blocos.items() if (not q or itens) %}
+  {% set cadastrados = itens|selectattr('1')|list|length %}
+  <div class="col-12 col-md-6 col-lg-4 col-xl-3 bloco-item">
+    <div class="card bloco-card h-100 p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+        <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-building me-1"></i> Bloco {{ b }}</h5>
+        <span class="badge text-bg-light border text-secondary">{{ cadastrados }}/{{ itens|length }} aptos</span>
+      </div>
+      <div class="apto-grid">
+        {% for apto, u in itens %}
+        {% if u %}
+        {% set resp = (u.inquilino_nome or u.proprietario) if u.inquilino else u.proprietario %}
+        <div class="position-relative">
+          <a href="/unidades/{{ u.id }}" class="apto-tile {{ 'inquilino' if u.inquilino }} {{ 'inativo' if not u.ativo }}"
+             title="{{ u.bloco_apto }} — {{ resp or 'Sem nome' }} (clique para abrir o cadastro)">
+            <span>{{ apto }}</span>
+            <small>{{ (resp or '—').split(' ')[0] }}</small>
+          </a>
+          <a href="#" data-unidade="{{ u.bloco_apto }}" class="position-absolute top-0 end-0 text-secondary px-1" style="font-size:.7rem;line-height:1.2" title="Resumo rápido ({{ u.bloco_apto }})"><i class="bi bi-eye"></i></a>
+        </div>
+        {% else %}
+        <div class="position-relative">
+          <a href="/unidades/nova?bloco_apto={{ b }}/{{ apto }}" class="apto-tile vago"
+             title="{{ b }}/{{ apto }} — Não cadastrado (clique para cadastrar)">
+            <span>{{ apto }}</span>
+            <small>+ Cadastrar</small>
+          </a>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12"><div class="card p-4 text-center text-muted">Nenhuma unidade encontrada para o filtro selecionado.</div></div>
+  {% endfor %}
+</div>
+
+<div id="visao-lista" class="card d-none"><div class="table-responsive"><table class="table table-hover mb-0">
+  <thead><tr><th>Bloco/Apto</th><th>Responsável (Inquilino / Proprietário)</th><th>Telefone</th><th>Moradores</th><th>Veículos</th><th>Situação</th></tr></thead>
+  {% for u in lista %}<tr style="cursor:pointer" onclick="location='/unidades/{{ u.id }}'">
+    <td><a href="/unidades/{{ u.id }}" class="fw-semibold">{{ u.bloco_apto }}</a></td>
+    <td>{% if u.inquilino %}{{ u.inquilino_nome or u.proprietario }} <span class="badge text-bg-info">Inquilino</span>{% else %}{{ u.proprietario }}{% endif %}</td>
+    <td>{{ (u.inquilino_telefone or u.telefone) if u.inquilino else u.telefone }}</td>
+    <td>{{ u.pessoas|selectattr('tipo','eq','MORADOR')|map(attribute='nome')|join(', ') }}</td>
+    <td>{{ u.veiculos|map(attribute='placa')|select|join(', ') }}</td>
+    <td>{% if u.ativo %}<span class="badge text-bg-success">Ativo</span>{% else %}<span class="badge text-bg-secondary">Inativo</span>{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="6" class="text-center text-muted py-4">Nada encontrado.</td></tr>{% endfor %}
+</table></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const bMapa = document.getElementById('btn-modo-mapa'), bLista = document.getElementById('btn-modo-lista');
+  const vMapa = document.getElementById('visao-mapa'), vLista = document.getElementById('visao-lista');
+  function modo(m) {
+    const mapa = m !== 'lista';
+    vMapa.classList.toggle('d-none', !mapa);
+    vLista.classList.toggle('d-none', mapa);
+    bMapa.classList.toggle('active', mapa);
+    bLista.classList.toggle('active', !mapa);
+    try { localStorage.setItem('modoMoradores', m); } catch (e) {}
+  }
+  bMapa.addEventListener('click', () => modo('mapa'));
+  bLista.addEventListener('click', () => modo('lista'));
+  try { if (localStorage.getItem('modoMoradores') === 'lista') modo('lista'); } catch (e) {}
+})();
+</script>
+{% endblock %}

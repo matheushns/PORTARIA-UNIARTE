@@ -1,0 +1,54 @@
+:root { --brand: #1e3a5f; --brand2: #2c6fbb; }
+html { overflow-y: scroll; }
+body { background: #f2f5f9; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* Menu lateral fixo */
+.sidebar { width: 230px; min-width: 230px; max-width: 230px; flex: 0 0 230px; height: 100vh; background: linear-gradient(180deg, var(--brand), #12263f); position: fixed; top: 0; left: 0; z-index: 1030; overflow-y: auto; box-shadow: 2px 0 12px rgba(0,0,0,.12); }
+.sidebar .brand { color: #fff; font-size: 1.3rem; font-weight: 700; white-space: nowrap; }
+.sidebar .brand small { display: block; font-size: .7rem; letter-spacing: .2em; color: #9db7d6; }
+.sidebar .nav-link { color: #c9d8ea; display: flex; align-items: center; gap: .55rem; padding: .55rem .85rem; border-radius: .5rem; font-weight: 500; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+.sidebar .nav-link:hover { background: rgba(255,255,255,.1); color: #fff; }
+.sidebar .nav-link.active { background: var(--brand2); color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+main { margin-left: 230px; min-width: 0; width: calc(100% - 230px); }
+
+/* Cards e estatísticas */
+.card { border: 1px solid rgba(0,0,0,.05); box-shadow: 0 2px 6px rgba(18,38,63,.06); border-radius: .75rem; }
+.stat { font-size: 2rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-icon { width: 46px; height: 46px; border-radius: .65rem; display: grid; place-items: center; font-size: 1.35rem; flex-shrink: 0; }
+.login-wrap { min-height: 100vh; display: grid; place-items: center; background: linear-gradient(135deg, var(--brand), var(--brand2)); }
+.table > :not(caption) > * > * { vertical-align: middle; }
+.table thead th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-bottom-width: 1px; }
+
+/* Responsividade Mobile */
+@media (max-width: 768px) {
+  .sidebar { position: fixed; bottom: 0; top: auto; left: 0; width: 100%; min-width: 100%; max-width: 100%; flex: none; height: auto; min-height: 0; z-index: 1030; flex-direction: row !important; padding: .4rem !important; }
+  .sidebar .brand, .sidebar hr, .sidebar .sidebar-clock, .sidebar form span { display: none; }
+  .sidebar ul { flex-direction: row !important; flex: 1; justify-content: space-around; }
+  main { margin-left: 0; width: 100%; padding-bottom: 5rem !important; }
+}
+
+/* Mapa de Blocos e Apartamentos */
+.bloco-card { border-top: 4px solid var(--brand); transition: transform .12s ease, box-shadow .12s ease; }
+.bloco-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(30,58,95,.14); }
+.apto-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; }
+.apto-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: .35rem .25rem; border-radius: .5rem; text-decoration: none; border: 1px solid #d7e0ec; background: #f8fafd; color: var(--brand); font-weight: 700; font-size: .85rem; line-height: 1.1; transition: all .12s ease; }
+.apto-tile small { font-weight: 400; font-size: .65rem; color: #5c6f84; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apto-tile:hover { background: var(--brand2); color: #fff; border-color: var(--brand2); }
+.apto-tile:hover small { color: #e2eefc; }
+.apto-tile.inquilino { border-color: #0dcaf0; background: #eefbff; }
+.apto-tile.inativo { opacity: .55; background: #eee; color: #666; }
+.apto-tile.vago { border-style: dashed; background: #fcfdff; color: #6c7a89; }
+
+/* Modo Escuro */
+[data-bs-theme="dark"] body { background: #11151c; color: #e2e8f0; }
+[data-bs-theme="dark"] .card { background: #1b222d; border-color: #263142; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+[data-bs-theme="dark"] .card-header.bg-white { background: #1b222d !important; border-color: #2b3545; }
+[data-bs-theme="dark"] .table thead th { color: #94a3b8; }
+[data-bs-theme="dark"] .bloco-card { border-top-color: var(--brand2); }
+[data-bs-theme="dark"] .apto-tile { background: #232c3b; border-color: #334155; color: #93c5fd; }
+[data-bs-theme="dark"] .apto-tile small { color: #94a3b8; }
+[data-bs-theme="dark"] .apto-tile:hover { background: var(--brand2); color: #fff; border-color: var(--brand2); }
+[data-bs-theme="dark"] .apto-tile:hover small { color: #e2eefc; }
+[data-bs-theme="dark"] .apto-tile.inquilino { background: #132f3e; border-color: #0dcaf0; color: #7dd3fc; }
+[data-bs-theme="dark"] .apto-tile.vago { background: #171e29; border-color: #334155; color: #64748b; }
+[data-bs-theme="dark"] .badge.text-bg-light { background: #263142 !important; color: #cbd5e1 !important; border-color: #3b495e !important; }

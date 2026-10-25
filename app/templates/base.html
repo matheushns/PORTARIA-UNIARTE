@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Portaria UNIARTE{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/static/app.css" rel="stylesheet">
+  <script>
+  // Tema escuro automático das 17h às 07h (horário de Brasília) ou escolha manual do usuário.
+  window.temaPorHorario = function () {
+    const h = +new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false }).format(new Date());
+    return (h >= 17 || h < 7) ? 'dark' : 'light';
+  };
+  window.aplicarTema = function () {
+    let pref = 'auto';
+    try { pref = localStorage.getItem('temaPortaria') || 'auto'; } catch (e) {}
+    const tema = (pref === 'dark' || pref === 'light') ? pref : window.temaPorHorario();
+    document.documentElement.setAttribute('data-bs-theme', tema);
+    const btn = document.getElementById('btn-tema');
+    if (btn) {
+      const icone = tema === 'dark' ? 'bi-moon-stars-fill text-warning' : 'bi-sun-fill text-warning';
+      const modoTxt = pref === 'auto' ? 'Auto (' + (tema === 'dark' ? 'Escuro' : 'Claro') + ')' : (tema === 'dark' ? 'Escuro' : 'Claro');
+      btn.innerHTML = '<i class="bi ' + icone + '"></i> <span class="ms-1">' + modoTxt + '</span>';
+      btn.title = 'Clique para alternar entre Modo Escuro, Claro e Automático (17h–7h)';
+    }
+  };
+  window.aplicarTema();
+  </script>
+</head>
+<body>
+{% if user %}
+<div class="d-flex">
+  <nav class="sidebar d-flex flex-column p-3">
+    <a href="/" class="brand mb-4 text-decoration-none"><i class="bi bi-shield-lock-fill"></i> Portaria <small>UNIARTE</small></a>
+    <ul class="nav nav-pills flex-column gap-1 mb-auto">
+      <li><a class="nav-link {{ 'active' if pagina=='painel' }}" href="/"><i class="bi bi-speedometer2"></i> Painel</a></li>
+      <li><a class="nav-link {{ 'active' if pagina=='registros' }}" href="/registros"><i class="bi bi-door-open"></i> Acessos</a></li>
+      <li><a class="nav-link {{ 'active' if pagina=='unidades' }}" href="/unidades"><i class="bi bi-buildings"></i> Moradores</a></li>
+      {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='usuarios' }}" href="/usuarios"><i class="bi bi-people"></i> Usuários</a></li>{% endif %}
+    </ul>
+    <hr>
+    <div class="sidebar-clock text-center py-2 px-2 mb-2 rounded-3" style="background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.12);">
+      <div class="fw-bold text-white lh-1" style="font-size: 1.75rem; font-variant-numeric: tabular-nums; letter-spacing: .03em;" id="relogio-hora">--:--:--</div>
+      <div class="small text-white-50 mt-1" style="font-size: .78rem;" id="relogio-data">--/--/----</div>
+    </div>
+    <div class="d-flex gap-1 mb-2">
+      <button type="button" id="btn-tema" class="btn btn-sm btn-outline-light flex-grow-1 text-start"></button>
+    </div>
+    <form method="post" action="/logout" class="d-flex justify-content-between align-items-center">
+      <span class="small text-white-50"><i class="bi bi-person-circle"></i> {{ user.nome or user.username }}</span>
+      <button class="btn btn-sm btn-outline-light" title="Sair"><i class="bi bi-box-arrow-right"></i></button>
+    </form>
+  </nav>
+  <main class="flex-grow-1 p-4">{% block content %}{% endblock %}</main>
+</div>
+{% else %}
+  {% block bare %}{% endblock %}
+{% endif %}
+<div class="modal fade" id="modalConfirmar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-question-circle text-warning"></i> Confirmação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+      <div class="modal-body" id="modalConfirmarTexto" style="white-space: pre-line"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="modalConfirmarOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="modalUnidade" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-buildings text-primary me-1"></i> Unidade <span id="muTitulo"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="muCorpo"></div>
+      <div class="modal-footer">
+        <a href="#" id="muLink" class="btn btn-outline-primary btn-sm me-auto"><i class="bi bi-pencil-square"></i> Abrir cadastro completo</a>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// confirmarBs(texto, rotulo, perigo) -> Promise<boolean>: confirmação em modal Bootstrap.
+window.confirmarBs = function (texto, rotulo, perigo) {
+  const el = document.getElementById('modalConfirmar');
+  const ok = document.getElementById('modalConfirmarOk');
+  const modal = bootstrap.Modal.getOrCreateInstance(el);
+  return new Promise(function (resolve) {
+    let confirmado = false;
+    document.getElementById('modalConfirmarTexto').textContent = texto;
+    ok.textContent = rotulo || 'Confirmar';
+    ok.className = 'btn ' + (perigo ? 'btn-danger' : 'btn-success');
+    ok.disabled = false;
+    const aoConfirmar = function () { confirmado = true; modal.hide(); };
+    ok.addEventListener('click', aoConfirmar, { once: true });
+    el.addEventListener('hidden.bs.modal', function () {
+      ok.removeEventListener('click', aoConfirmar);
+      resolve(confirmado);
+    }, { once: true });
+    modal.show();
+  });
+};
+// Qualquer <form data-confirm="texto" data-confirm-btn="rótulo"> pede confirmação em um modal Bootstrap.
+document.addEventListener('submit', function (e) {
+  const f = e.target;
+  if (!f.dataset || !f.dataset.confirm) return;
+  e.preventDefault();
+  confirmarBs(f.dataset.confirm, f.dataset.confirmBtn).then(function (ok) { if (ok) f.submit(); });
+});
+
+// Popup de informações importantes da unidade ao clicar em qualquer link com data-unidade="XX/XXX"
+(function () {
+  const el = document.getElementById('modalUnidade');
+  if (!el) return;
+  const modal = bootstrap.Modal.getOrCreateInstance(el);
+  const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const linkWhats = v => {
+    let d = String(v || '').replace(/\D/g, '');
+    if (d.length === 9 && d[0] === '9') d = '34' + d;
+    if (d.length === 10 || d.length === 11) d = '55' + d;
+    return (d.length === 13 && d.startsWith('55') && d[4] === '9') ? 'https://wa.me/' + d : null;
+  };
+  const fmtTel = v => {
+    if (!v) return '—';
+    const u = linkWhats(v);
+    return esc(v) + (u ? ' <a href="' + u + '" target="_blank" rel="noopener" class="btn btn-sm btn-success py-0 px-1 ms-1" title="Conversar no WhatsApp"><i class="bi bi-whatsapp"></i></a>' : '');
+  };
+  const badgeLib = lib => {
+    if (lib === 'LIBERADO') return '<span class="badge text-bg-success">LIBERADO</span>';
+    if (lib === 'NÃO LIBERADO') return '<span class="badge text-bg-danger">NÃO LIBERADO</span>';
+    return '<span class="badge text-bg-secondary">—</span>';
+  };
+  const tabelaPessoas = (lista, comLib) => {
+    if (!lista.length) return '<div class="text-muted small">Nenhum cadastrado.</div>';
+    let h = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th>'
+            + (comLib ? '<th>Parentesco</th><th>Liberação</th>' : '') + '</tr></thead><tbody>';
+    lista.forEach(p => {
+      h += '<tr><td class="fw-semibold">' + esc(p.nome) + '</td><td>' + esc(p.cpf || '—') + '</td><td>' + fmtTel(p.telefone) + '</td>'
+           + (comLib ? '<td>' + esc(p.parentesco || '—') + '</td><td>' + badgeLib(p.liberacao) + '</td>' : '') + '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  };
+
+  document.addEventListener('click', async function (e) {
+    const a = e.target.closest('[data-unidade]');
+    if (!a) return;
+    e.preventDefault();
+    const apto = (a.dataset.unidade || '').trim();
+    if (!apto) return;
+    document.getElementById('muTitulo').textContent = apto;
+    const corpo = document.getElementById('muCorpo');
+    const link = document.getElementById('muLink');
+    corpo.innerHTML = '<div class="text-center text-muted py-3">Carregando...</div>';
+    link.classList.add('d-none');
+    modal.show();
+    try {
+      const d = await (await fetch('/api/unidade/' + encodeURIComponent(apto))).json();
+      if (!d.encontrada) {
+        corpo.innerHTML = '<div class="alert alert-warning mb-0">Unidade <b>' + esc(apto) + '</b> não encontrada no cadastro de moradores.</div>';
+        return;
+      }
+      link.href = '/unidades/' + d.id;
+      link.classList.remove('d-none');
+      const moradores = d.pessoas.filter(p => p.tipo === 'MORADOR');
+      const autorizados = d.pessoas.filter(p => p.tipo === 'AUTORIZADO');
+      const diaristas = d.pessoas.filter(p => p.tipo === 'DIARISTA');
+      const veiculos = d.veiculos.length
+        ? d.veiculos.map(v => '<span class="badge text-bg-light border text-dark me-1">' + esc([v.modelo, v.cor, v.placa].filter(Boolean).join(' · ')) + '</span>').join('')
+        : '<span class="text-muted small">Nenhum cadastrado.</span>';
+      const contatoPrincipal = d.inquilino
+        ? '<div><span class="text-muted small">Inquilino:</span> <b>' + esc(d.inquilino_nome || '—') + '</b>' +
+          (d.inquilino_cpf ? ' · <span class="text-muted small">CPF: ' + esc(d.inquilino_cpf) + '</span>' : '') +
+          (d.inquilino_telefone ? ' · <span class="text-muted small"><i class="bi bi-telephone"></i> ' + fmtTel(d.inquilino_telefone) + '</span>' : '') +
+          '</div>'
+        : '<div><span class="text-muted small">Proprietário:</span> <b>' + esc(d.proprietario || '—') + '</b>' +
+          (d.cpf ? ' · <span class="text-muted small">CPF: ' + esc(d.cpf) + '</span>' : '') +
+          (d.telefone ? ' · <span class="text-muted small"><i class="bi bi-telephone"></i> ' + fmtTel(d.telefone) + '</span>' : '') +
+          '</div>';
+      const obsTexto = [d.inquilino ? d.inquilino_observacoes : '', d.observacoes].filter(Boolean).join(' | ');
+      corpo.innerHTML =
+        '<div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">' +
+          contatoPrincipal +
+          '<div>' + (d.ativo ? '<span class="badge text-bg-success">Ativo</span>' : '<span class="badge text-bg-secondary">Inativo</span>') +
+          (d.inquilino ? ' <span class="badge text-bg-info">Inquilino</span>' : '') + '</div>' +
+        '</div>' +
+        (obsTexto ? '<div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-circle"></i> <b>Observações:</b> ' + esc(obsTexto) + '</div>' : '') +
+        '<h6 class="mt-2 mb-1">Moradores / Inquilinos</h6>' + tabelaPessoas(moradores, true) +
+        '<h6 class="mt-3 mb-1">Autorizados</h6>' + tabelaPessoas(autorizados, true) +
+        '<h6 class="mt-3 mb-1">Diaristas</h6>' + tabelaPessoas(diaristas, false) +
+        '<div class="mt-3"><h6>Veículos</h6>' + veiculos + '</div>';
+    } catch (err) {
+      corpo.innerHTML = '<div class="alert alert-danger mb-0">Erro ao carregar dados da unidade.</div>';
+    }
+  });
+})();
+
+// Alternar tema manualmente (ciclo: Auto -> Escuro -> Claro -> Auto) e reavaliar a cada minuto no modo Auto
+(function () {
+  window.aplicarTema();
+  const btn = document.getElementById('btn-tema');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      let atual = 'auto';
+      try { atual = localStorage.getItem('temaPortaria') || 'auto'; } catch (e) {}
+      let prox;
+      if (atual === 'auto') {
+        prox = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+      } else if (atual === 'dark') {
+        prox = 'light';
+      } else {
+        prox = 'auto';
+      }
+      try { localStorage.setItem('temaPortaria', prox); } catch (e) {}
+      window.aplicarTema();
+    });
+  }
+  setInterval(window.aplicarTema, 60000);
+})();
+
+// Relógio em tempo real no menu lateral (Horário de Brasília)
+(function () {
+  const elHora = document.getElementById('relogio-hora');
+  const elData = document.getElementById('relogio-data');
+  if (!elHora || !elData) return;
+  const fmtData = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmtHora = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  function atualizarRelogio() {
+    const agora = new Date();
+    elHora.textContent = fmtHora.format(agora);
+    elData.textContent = fmtData.format(agora);
+  }
+  atualizarRelogio();
+  setInterval(atualizarRelogio, 1000);
+})();
+</script>
+<script src="/static/mask.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

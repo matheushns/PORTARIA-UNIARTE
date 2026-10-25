@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h3 class="mb-3">Usuários</h3>
+{% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+<div class="card mb-3"><table class="table mb-0">
+  <thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Situação</th><th>Nova senha</th><th></th></tr></thead>
+  {% for x in lista %}{% set f = 'f' ~ x.id %}<tr>
+    <td><form id="{{ f }}" method="post" action="/usuarios/salvar"><input type="hidden" name="id" value="{{ x.id }}"></form>
+      <input form="{{ f }}" name="username" value="{{ x.username }}" class="form-control form-control-sm" required></td>
+    <td><input form="{{ f }}" name="nome" value="{{ x.nome }}" class="form-control form-control-sm"></td>
+    <td><div class="form-check"><input form="{{ f }}" type="checkbox" class="form-check-input" name="admin" {{ 'checked' if x.admin }}> admin</div></td>
+    <td><div class="form-check"><input form="{{ f }}" type="checkbox" class="form-check-input" name="ativo" {{ 'checked' if x.ativo }}> ativo</div></td>
+    <td><input form="{{ f }}" name="senha" type="password" placeholder="(manter)" class="form-control form-control-sm" autocomplete="new-password"></td>
+    <td><button form="{{ f }}" class="btn btn-sm btn-outline-primary">Salvar</button></td></tr>{% endfor %}
+</table></div>
+<div class="card p-3"><h6>Novo usuário</h6>
+<form method="post" action="/usuarios/salvar" class="row g-2">
+  <div class="col-md-3"><input name="username" placeholder="Usuário" class="form-control" required></div>
+  <div class="col-md-3"><input name="nome" placeholder="Nome" class="form-control"></div>
+  <div class="col-md-3"><input name="senha" type="password" placeholder="Senha (mín. 6)" class="form-control" required autocomplete="new-password"></div>
+  <input type="hidden" name="ativo" value="on">
+  <div class="col-md-1 form-check pt-2 ms-2"><input type="checkbox" class="form-check-input" name="admin" id="adm"><label for="adm" class="form-check-label">admin</label></div>
+  <div class="col"><button class="btn btn-primary w-100">Criar</button></div>
+</form></div>
+{% endblock %}
