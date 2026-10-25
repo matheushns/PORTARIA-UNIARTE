@@ -1,6 +1,6 @@
 """Inicializador Desktop (Windows) da Portaria UNIARTE com Auto-Atualização Remota via GitHub.
 
-1. Exibe instantaneamente uma janela de abertura ("Abrindo o programa, aguarde...") ao dar duplo clique.
+1. Abre imediatamente a janela principal com uma tela de carregamento ("Abrindo o programa, aguarde...").
 2. Verifica no repositório GitHub (matheushns/PORTARIA-UNIARTE) se há um commit novo.
 3. Caso exista, baixa o zip da branch master e atualiza a pasta local `app/` antes de importar o FastAPI.
 4. Inicia o servidor FastAPI em uma porta local livre em segundo plano e carrega o sistema na janela.
@@ -27,70 +27,6 @@ PASTA_APP_REMOTO = PASTA_BASE / "app_atualizado"
 ARQUIVO_VERSAO = PASTA_BASE / ".versao_commit"
 GITHUB_REPO = "matheushns/PORTARIA-UNIARTE"
 GITHUB_BRANCH = "master"
-
-_evento_fechar_splash_nativo = threading.Event()
-
-
-def _iniciar_splash_nativo():
-    """Abre um aviso nativo leve (Tkinter) imediatamente após o duplo clique, enquanto o WebView2 carrega."""
-    def _rodar():
-        try:
-            import tkinter as tk
-
-            root = tk.Tk()
-            root.overrideredirect(True)
-            root.attributes("-topmost", True)
-            larg, alt = 400, 185
-            sw = root.winfo_screenwidth()
-            sh = root.winfo_screenheight()
-            x = (sw - larg) // 2
-            y = (sh - alt) // 2
-            root.geometry(f"{larg}x{alt}+{x}+{y}")
-            root.configure(bg="#f0b429")
-
-            frame = tk.Frame(root, bg="#152a45", bd=0)
-            frame.place(x=2, y=2, width=larg - 4, height=alt - 4)
-
-            tk.Label(
-                frame,
-                text="PORTARIA UNIARTE",
-                font=("Segoe UI", 16, "bold"),
-                fg="#ffffff",
-                bg="#152a45",
-            ).pack(pady=(30, 4))
-
-            tk.Label(
-                frame,
-                text="Sistema de Controle de Acesso",
-                font=("Segoe UI", 10),
-                fg="#a8c0dd",
-                bg="#152a45",
-            ).pack(pady=(0, 20))
-
-            tk.Label(
-                frame,
-                text="⏳ Abrindo o programa, por favor aguarde...",
-                font=("Segoe UI", 10, "bold"),
-                fg="#f0b429",
-                bg="#152a45",
-            ).pack()
-
-            def _verificar_fechamento():
-                if _evento_fechar_splash_nativo.is_set():
-                    try:
-                        root.destroy()
-                    except Exception:
-                        pass
-                else:
-                    root.after(60, _verificar_fechamento)
-
-            root.after(60, _verificar_fechamento)
-            root.mainloop()
-        except Exception:
-            pass
-
-    t = threading.Thread(target=_rodar, daemon=True)
-    t.start()
 
 
 def verificar_e_atualizar():
@@ -304,9 +240,6 @@ if False:  # pragma: no cover
 
 
 def main():
-    # 1. Mostra o aviso nativo imediatamente após o duplo clique
-    _iniciar_splash_nativo()
-
     import webview
 
     pasta_cookies = PASTA_BASE / ".webview_cache"
@@ -331,9 +264,6 @@ def main():
             pass
 
     def _inicializar_sistema():
-        # Assim que a janela principal do WebView apareceu com o splash HTML, fecha o splash nativo
-        _evento_fechar_splash_nativo.set()
-
         import uvicorn
 
         fastapi_app = carregar_app(callback_status=_set_status)
@@ -353,10 +283,7 @@ def main():
         _set_status("Abrindo painel da portaria...")
         janela.load_url(url)
 
-    try:
-        webview.start(_inicializar_sistema, private_mode=False, storage_path=str(pasta_cookies))
-    finally:
-        _evento_fechar_splash_nativo.set()
+    webview.start(_inicializar_sistema, private_mode=False, storage_path=str(pasta_cookies))
 
     # Atualiza o carimbo de hora ao fechar a janela para contar 1 hora exata a partir do fechamento
     arq_sessao = PASTA_BASE / ".sessao_ativa.json"
