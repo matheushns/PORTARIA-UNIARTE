@@ -44,18 +44,36 @@
 {% block scripts %}
 <script>
 const campoApto = document.getElementById('bloco_apto'), info = document.getElementById('info-unidade');
+let seqConsulta = 0;
 async function consulta() {
+  const minha = ++seqConsulta;
   const v = campoApto.value.trim();
   if (!v) { info.classList.add('d-none'); return; }
-  const r = await fetch('/api/unidade/' + encodeURIComponent(v));
-  const d = await r.json();
-  if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada.'; return; }
   info.className = 'alert alert-info py-2 mb-0';
-  const aut = d.pessoas.filter(p => p.tipo !== 'DIARISTA').map(p => p.nome + ([p.parentesco, p.liberacao].filter(Boolean).length ? ' (' + [p.parentesco, p.liberacao].filter(Boolean).join(' · ') + ')' : '')).join(', ');
-  const resp = d.inquilino ? ('Inquilino: ' + (d.inquilino_nome || '—')) : ('Proprietário: ' + (d.proprietario || '—'));
-  const obs = [d.inquilino ? d.inquilino_observacoes : '', d.observacoes].filter(Boolean).join(' | ');
-  info.innerHTML = '<a href="#" data-unidade="' + v + '" class="btn btn-sm btn-outline-primary float-end"><i class="bi bi-eye"></i> Ver detalhes</a><b>' + resp + '</b>' + (d.ativo ? '' : ' <span class="badge text-bg-warning">inativo</span>') +
-    (aut ? '<br><small>Pessoas: ' + aut + '</small>' : '') + (obs ? '<br><small>Obs.: ' + obs + '</small>' : '');
+  info.innerHTML =
+    '<div class="d-flex align-items-center gap-2 mb-1 small fw-semibold">' +
+      '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>' +
+      '<span>Buscando informações dos moradores de <b>' + v + '</b> no banco de dados...</span>' +
+    '</div>' +
+    '<div class="progress" style="height: 6px;">' +
+      '<div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>' +
+    '</div>';
+  try {
+    const r = await fetch('/api/unidade/' + encodeURIComponent(v));
+    const d = await r.json();
+    if (minha !== seqConsulta) return;
+    if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada.'; return; }
+    info.className = 'alert alert-info py-2 mb-0';
+    const aut = d.pessoas.filter(p => p.tipo !== 'DIARISTA').map(p => p.nome + ([p.parentesco, p.liberacao].filter(Boolean).length ? ' (' + [p.parentesco, p.liberacao].filter(Boolean).join(' · ') + ')' : '')).join(', ');
+    const resp = d.inquilino ? ('Inquilino: ' + (d.inquilino_nome || '—')) : ('Proprietário: ' + (d.proprietario || '—'));
+    const obs = [d.inquilino ? d.inquilino_observacoes : '', d.observacoes].filter(Boolean).join(' | ');
+    info.innerHTML = '<a href="#" data-unidade="' + v + '" class="btn btn-sm btn-outline-primary float-end"><i class="bi bi-eye"></i> Ver detalhes</a><b>' + resp + '</b>' + (d.ativo ? '' : ' <span class="badge text-bg-warning">inativo</span>') +
+      (aut ? '<br><small>Pessoas: ' + aut + '</small>' : '') + (obs ? '<br><small>Obs.: ' + obs + '</small>' : '');
+  } catch (e) {
+    if (minha !== seqConsulta) return;
+    info.className = 'alert alert-danger py-2 mb-0';
+    info.textContent = 'Erro ao buscar informações da unidade no banco de dados.';
+  }
 }
 
 // Combos encadeados: o apartamento só é carregado depois de escolher o bloco.

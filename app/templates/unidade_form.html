@@ -73,6 +73,17 @@
         </select>
       </div>
       <input type="hidden" name="bloco_apto" id="bloco_apto" value="{{ u.bloco_apto or '' }}"></div>
+    <div class="col-12 d-none" id="buscando-unidade">
+      <div class="alert alert-info py-2 mb-0">
+        <div class="d-flex align-items-center gap-2 mb-1 small fw-semibold">
+          <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+          <span>Buscando informações dos moradores de <b id="buscando-apto"></b> no banco de dados...</span>
+        </div>
+        <div class="progress" style="height: 6px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>
+        </div>
+      </div>
+    </div>
     <div class="col-12 d-none" id="aviso-duplicada">
       <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-0">
         <span><i class="bi bi-exclamation-triangle-fill"></i> Já existe um cadastro para <b id="aviso-apto"></b><span id="aviso-prop" class="text-muted"></span>.</span>
@@ -135,16 +146,27 @@
 const selB = document.getElementById('sel_bloco'), inpA = document.getElementById('inp_apto'), hid = document.getElementById('bloco_apto');
 function compoe() { hid.value = (selB.value && inpA.value) ? selB.value + '/' + inpA.value : ''; }
 const idAtual = {{ u.id or 'null' }};
-const aviso = document.getElementById('aviso-duplicada'), btnSalvar = document.getElementById('btn-salvar');
+const aviso = document.getElementById('aviso-duplicada'), buscando = document.getElementById('buscando-unidade'), buscandoApto = document.getElementById('buscando-apto'), btnSalvar = document.getElementById('btn-salvar');
 let seq = 0;
 // Verifica assim que bloco e apartamento (3 dígitos) estiverem completos, sem esperar os demais campos.
 async function verifica() {
   const minha = ++seq;
   const v = hid.value;
-  if (!/^\d{2}\/\d{3}$/.test(v)) { aviso.classList.add('d-none'); btnSalvar.disabled = false; return; }
+  if (!/^\d{2}\/\d{3}$/.test(v)) {
+    aviso.classList.add('d-none');
+    if (buscando) buscando.classList.add('d-none');
+    btnSalvar.disabled = false;
+    return;
+  }
+  aviso.classList.add('d-none');
+  if (buscando) {
+    if (buscandoApto) buscandoApto.textContent = v;
+    buscando.classList.remove('d-none');
+  }
   try {
     const d = await (await fetch('/api/unidade/' + encodeURIComponent(v))).json();
     if (minha !== seq) return; // resposta antiga
+    if (buscando) buscando.classList.add('d-none');
     const duplicada = d.encontrada && d.id !== idAtual;
     aviso.classList.toggle('d-none', !duplicada);
     btnSalvar.disabled = duplicada;
@@ -153,10 +175,12 @@ async function verifica() {
       document.getElementById('aviso-prop').textContent = d.proprietario ? ' (' + d.proprietario + ')' : '';
       document.getElementById('aviso-link').href = '/unidades/' + d.id;
     }
-  } catch (e) { /* offline: o servidor ainda valida ao salvar */ }
+  } catch (e) {
+    if (minha === seq && buscando) buscando.classList.add('d-none');
+  }
 }
-selB.addEventListener('change', () => { compoe(); verifica(); verifica(); });
-inpA.addEventListener('change', () => { compoe(); verifica(); verifica(); });
+selB.addEventListener('change', () => { compoe(); verifica(); });
+inpA.addEventListener('change', () => { compoe(); verifica(); });
 const bloco0 = (hid.value || '').slice(0, 2);
 if (bloco0 && !selB.value) selB.add(new Option(bloco0, bloco0, true, true)); // bloco fora de 01-15 (dado antigo)
 compoe(); verifica();

@@ -287,7 +287,7 @@ document.addEventListener('change', function (e) {
     document.getElementById('muTitulo').textContent = apto;
     const corpo = document.getElementById('muCorpo');
     const link = document.getElementById('muLink');
-    corpo.innerHTML = '<div class="text-center text-muted py-3">Carregando...</div>';
+    corpo.innerHTML = '<div class="py-3 px-2">' + '<div class="d-flex align-items-center gap-2 mb-2 small fw-semibold text-primary">' + '<span class="spinner-border spinner-border-sm" role="status"></span>' + '<span>Buscando informações dos moradores de <b>' + esc(apto) + '</b> no banco de dados...</span></div>' + '<div class="progress" style="height: 6px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div></div>' + '</div>';
     link.classList.add('d-none');
     modal.show();
     try {
