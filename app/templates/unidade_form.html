@@ -294,6 +294,7 @@ if (btnExcUni) {
     if (await confirmarBs('Tem certeza que deseja excluir o cadastro desta unidade?', 'Sim, excluir', true)) {
       const f = this.closest('form');
       f.action = this.getAttribute('formaction');
+      if (window.mostrarCarregando) window.mostrarCarregando('Excluindo cadastro da unidade...');
       f.submit();
     }
   });
