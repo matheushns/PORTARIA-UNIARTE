@@ -96,36 +96,42 @@ def carregar_app(callback_status=None):
         verificar_e_atualizar()
         pasta_pkg = PASTA_APP_REMOTO / "app"
         if (pasta_pkg / "main.py").exists():
-            sys.path.insert(0, str(PASTA_APP_REMOTO))
-            for mod in list(sys.modules.keys()):
-                if mod == "app" or mod.startswith("app."):
-                    del sys.modules[mod]
-            spec = importlib.util.spec_from_file_location(
-                "app",
-                str(pasta_pkg / "__init__.py"),
-                submodule_search_locations=[str(pasta_pkg)],
-            )
-            if spec and spec.loader:
-                pkg = importlib.util.module_from_spec(spec)
-                sys.modules["app"] = pkg
-                spec.loader.exec_module(pkg)
-                ordem = ["config", "security", "database", "models", "updater", "main"]
-                extras = [
-                    arq.stem
-                    for arq in pasta_pkg.glob("*.py")
-                    if arq.stem not in ordem and arq.stem != "__init__"
-                ]
-                for nome_mod in ordem + extras:
-                    arq_py = pasta_pkg / f"{nome_mod}.py"
-                    if arq_py.exists():
-                        nome_completo = f"app.{nome_mod}"
-                        sp = importlib.util.spec_from_file_location(nome_completo, str(arq_py))
-                        if sp and sp.loader:
-                            m_obj = importlib.util.module_from_spec(sp)
-                            m_obj.__package__ = "app"
-                            sys.modules[nome_completo] = m_obj
-                            setattr(pkg, nome_mod, m_obj)
-                            sp.loader.exec_module(m_obj)
+            try:
+                sys.path.insert(0, str(PASTA_APP_REMOTO))
+                for mod in list(sys.modules.keys()):
+                    if mod == "app" or mod.startswith("app."):
+                        del sys.modules[mod]
+                spec = importlib.util.spec_from_file_location(
+                    "app",
+                    str(pasta_pkg / "__init__.py"),
+                    submodule_search_locations=[str(pasta_pkg)],
+                )
+                if spec and spec.loader:
+                    pkg = importlib.util.module_from_spec(spec)
+                    sys.modules["app"] = pkg
+                    spec.loader.exec_module(pkg)
+                    ordem = ["config", "security", "database", "models", "updater", "main"]
+                    extras = [
+                        arq.stem
+                        for arq in pasta_pkg.glob("*.py")
+                        if arq.stem not in ordem and arq.stem != "__init__"
+                    ]
+                    for nome_mod in ordem + extras:
+                        arq_py = pasta_pkg / f"{nome_mod}.py"
+                        if arq_py.exists():
+                            nome_completo = f"app.{nome_mod}"
+                            sp = importlib.util.spec_from_file_location(nome_completo, str(arq_py))
+                            if sp and sp.loader:
+                                m_obj = importlib.util.module_from_spec(sp)
+                                m_obj.__package__ = "app"
+                                sys.modules[nome_completo] = m_obj
+                                setattr(pkg, nome_mod, m_obj)
+                                sp.loader.exec_module(m_obj)
+            except Exception:
+                for mod in list(sys.modules.keys()):
+                    if mod == "app" or mod.startswith("app."):
+                        del sys.modules[mod]
+                shutil.rmtree(PASTA_APP_REMOTO, ignore_errors=True)
 
     if callback_status:
         callback_status("Carregando módulos e banco de dados...")
