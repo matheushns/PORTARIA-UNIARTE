@@ -325,10 +325,10 @@ async def unidade_salvar(request: Request, user: Usuario = Depends(usuario_atual
         erro = "Informe o Bloco/Apto no formato 00/000 (bloco de 01 a 15)."
     elif duplicada:
         erro = "Já existe uma unidade com esse Bloco/Apto."
-    elif not u.proprietario or not u.cpf or not u.telefone:
-        erro = "Preencha Nome, CPF e Telefone do Proprietário antes de finalizar o cadastro."
-    elif u.inquilino and (not u.inquilino_nome or not u.inquilino_cpf or not u.inquilino_telefone):
-        erro = "Preencha Nome, CPF e Telefone do Inquilino antes de finalizar o cadastro."
+    elif not u.proprietario or not u.cpf:
+        erro = "Preencha Nome e CPF do Proprietário antes de finalizar o cadastro."
+    elif u.inquilino and (not u.inquilino_nome or not u.inquilino_cpf):
+        erro = "Preencha Nome e CPF do Inquilino antes de finalizar o cadastro."
 
     if erro:
         db.expunge_all()
@@ -431,10 +431,10 @@ async def registro_salvar(request: Request, user: Usuario = Depends(usuario_atua
             setattr(r, campo, datetime.strptime(f.get(campo) or "", "%Y-%m-%dT%H:%M"))
         except ValueError:
             setattr(r, campo, config.agora() if campo == "entrada" else None)
-    if not r.bloco_apto or not r.nome or not r.cpf or not r.telefone:
+    if not r.bloco_apto or not r.nome or not r.cpf:
         db.expunge_all()
         return render(request, "registro_form.html", user, r=r, blocos=_mapa_blocos(db),
-                      pagina="registros", erro="Preencha Bloco/Apto, Nome, CPF e Telefone antes de finalizar o cadastro.")
+                      pagina="registros", erro="Preencha Bloco/Apto, Nome e CPF antes de finalizar o cadastro.")
     db.add(r)
     db.commit()
     return RedirectResponse("/registros", status_code=303)

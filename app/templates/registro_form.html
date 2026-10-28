@@ -29,7 +29,7 @@
       <input type="hidden" name="bloco_apto" id="bloco_apto" value="{{ r.bloco_apto or '' }}"></div>
     <div class="col-12"><div id="info-unidade" class="alert alert-info py-2 d-none mb-0"></div></div>
     {{ campo('nome','Nome *',r.nome,'col-md-5','required autofocus') }}
-    {{ campo('cpf','CPF *',r.cpf,'col-md-3','required') }}{{ campo('rg','RG',r.rg,'col-md-2') }}{{ campo('telefone','Telefone *',r.telefone,'col-md-2','required') }}
+    {{ campo('cpf','CPF *',r.cpf,'col-md-3','required') }}{{ campo('rg','RG',r.rg,'col-md-2') }}{{ campo('telefone','Telefone',r.telefone,'col-md-2') }}
     {{ campo('empresa','Empresa',r.empresa,'col-md-4') }}{{ campo('veiculo','Veículo',r.veiculo,'col-md-4') }}{{ campo('placa','Placa',r.placa,'col-md-4') }}
     <div class="col-12"><label class="form-label small mb-0">Observações</label><textarea name="observacoes" class="form-control" rows="2">{{ r.observacoes or '' }}</textarea></div>
     <div class="col-12"><div class="small text-muted"><i class="bi bi-person-badge"></i> Autorizado por — Porteiro(a): <strong>{{ r.autorizado_por or user.nome or user.username }}</strong></div></div>

@@ -92,7 +92,7 @@
     </div>
     {{ campo('proprietario','Proprietário *',u.proprietario,'col-md-6','required') }}
     {{ campo('cpf','CPF *',u.cpf,'col-md-2','required') }}{{ campo('rg','RG',u.rg,'col-md-2') }}
-    {{ campo('telefone','Telefone *',u.telefone,'col-md-3','required') }}{{ campo('tel_residencial','Tel. residencial',u.tel_residencial,'col-md-3') }}
+    {{ campo('telefone','Telefone',u.telefone,'col-md-3') }}{{ campo('tel_residencial','Tel. residencial',u.tel_residencial,'col-md-3') }}
     {{ campo('email','E-mail',u.email,'col-md-6') }}
     <div class="col-12">{{ check('ativo','Ativo',u.ativo) }}{{ check('inquilino','Possui inquilino',u.inquilino) }}</div>
     <div class="col-12"><label class="form-label small mb-0">Observações</label><textarea class="form-control form-control-sm" name="observacoes" rows="2">{{ u.observacoes or '' }}</textarea></div>
@@ -103,7 +103,7 @@
     <div class="row g-2">
       {{ campo('inquilino_nome','Inquilino *',u.inquilino_nome,'col-md-8') }}
       {{ campo('inquilino_cpf','CPF *',u.inquilino_cpf,'col-md-2') }}{{ campo('inquilino_rg','RG',u.inquilino_rg,'col-md-2') }}
-      {{ campo('inquilino_telefone','Telefone *',u.inquilino_telefone,'col-md-3') }}{{ campo('inquilino_tel_residencial','Tel. residencial',u.inquilino_tel_residencial,'col-md-3') }}
+      {{ campo('inquilino_telefone','Telefone',u.inquilino_telefone,'col-md-3') }}{{ campo('inquilino_tel_residencial','Tel. residencial',u.inquilino_tel_residencial,'col-md-3') }}
       {{ campo('inquilino_email','E-mail',u.inquilino_email,'col-md-6') }}
       <div class="col-12"><label class="form-label small mb-0">Observações do inquilino</label><textarea class="form-control form-control-sm" name="inquilino_observacoes" rows="2">{{ u.inquilino_observacoes or '' }}</textarea></div>
     </div>
@@ -270,7 +270,7 @@ document.querySelectorAll('.grupo').forEach(g => {
   const secInq = document.getElementById('secao-inquilino');
   if (chkInq && secInq) {
     const reqInq = () => {
-      ['inquilino_nome', 'inquilino_cpf', 'inquilino_telefone'].forEach(n => {
+      ['inquilino_nome', 'inquilino_cpf'].forEach(n => {
         const el = secInq.querySelector(`input[name="${n}"]`);
         if (el) el.required = chkInq.checked;
       });
