@@ -320,16 +320,6 @@ def main():
 
     webview.start(_inicializar_sistema, private_mode=False, storage_path=str(pasta_cookies))
 
-    # Atualiza o carimbo de hora ao fechar a janela para contar 1 hora exata a partir do fechamento
-    arq_sessao = PASTA_BASE / ".sessao_ativa.json"
-    if arq_sessao.exists():
-        try:
-            d = json.loads(arq_sessao.read_text(encoding="utf-8"))
-            if d.get("uid"):
-                d["ts"] = time.time()
-                arq_sessao.write_text(json.dumps(d), encoding="utf-8")
-        except Exception:
-            pass
     if servidor_ref["instancia"] is not None:
         servidor_ref["instancia"].should_exit = True
 

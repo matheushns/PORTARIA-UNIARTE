@@ -47,10 +47,11 @@ import time as _time
 
 app = FastAPI(title="Portaria UNIARTE", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, same_site="lax",
-                   https_only=config.COOKIE_SECURE, max_age=60 * 60 * 24 * 30)
+                   https_only=config.COOKIE_SECURE, max_age=None)  # cookie de sessão: some ao fechar
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
-TEMPO_PERSISTENCIA_FECHADO = 3600  # 1 hora (em segundos) após fechar o programa
+TEMPO_PERSISTENCIA_FECHADO = 120  # segundos: só vale para reabrir após "Reiniciar agora" (atualização)
+BOOT_ID = str(_time.time())  # muda a cada abertura do programa; sessões antigas deixam de valer
 
 
 def _arq_sessao_local() -> Path:
@@ -77,9 +78,9 @@ def _ler_sessao_local() -> int | None:
         d = _json.loads(arq.read_text(encoding="utf-8"))
         uid = d.get("uid")
         ts = float(d.get("ts") or 0)
+        arq.unlink(missing_ok=True)  # uso único
         if uid and (_time.time() - ts) <= TEMPO_PERSISTENCIA_FECHADO:
             return int(uid)
-        arq.unlink(missing_ok=True)
     except Exception:
         pass
     return None
@@ -111,17 +112,23 @@ async def _sem_perm(request: Request, exc: SemPermissao):
     return HTMLResponse("Acesso restrito a administradores.", status_code=403)
 
 
-def usuario_atual(request: Request, db: Session = Depends(get_db)) -> Usuario:
+def _uid_da_sessao(request: Request) -> int | None:
     uid = request.session.get("uid")
+    if uid and _eh_local(request) and request.session.get("boot") != BOOT_ID:
+        uid = None  # sessão de uma abertura anterior do programa
     if not uid and _eh_local(request):
-        uid = _ler_sessao_local()
+        uid = _ler_sessao_local()  # só existe logo após "Reiniciar agora"
         if uid:
             request.session["uid"] = uid
+            request.session["boot"] = BOOT_ID
+    return uid
+
+
+def usuario_atual(request: Request, db: Session = Depends(get_db)) -> Usuario:
+    uid = _uid_da_sessao(request)
     user = db.get(Usuario, uid) if uid else None
     if not user or not user.ativo:
         raise NaoAutenticado()
-    if _eh_local(request):
-        _salvar_sessao_local(user.id)
     return user
 
 
@@ -141,13 +148,12 @@ _tentativas: dict[str, list[datetime]] = {}
 
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request, db: Session = Depends(get_db)):
-    uid = request.session.get("uid") or (_ler_sessao_local() if _eh_local(request) else None)
+    uid = _uid_da_sessao(request)
     if uid:
         user = db.get(Usuario, uid)
         if user and user.ativo:
             request.session["uid"] = user.id
-            if _eh_local(request):
-                _salvar_sessao_local(user.id)
+            request.session["boot"] = BOOT_ID
             return RedirectResponse("/", status_code=303)
     return render(request, "login.html", erro=None)
 
@@ -167,8 +173,7 @@ def login(request: Request, username: str = Form(...), senha: str = Form(...),
     _tentativas.pop(ip, None)
     request.session.clear()
     request.session["uid"] = user.id
-    if _eh_local(request):
-        _salvar_sessao_local(user.id)
+    request.session["boot"] = BOOT_ID
     return RedirectResponse("/", status_code=303)
 
 
@@ -508,6 +513,25 @@ def usuario_salvar(request: Request, username: str = Form(...), nome: str = Form
     if senha:
         alvo.senha_hash = hash_senha(senha)
     db.add(alvo)
+    db.commit()
+    return RedirectResponse("/usuarios", status_code=303)
+
+
+@app.post("/usuarios/{uid}/excluir")
+def usuario_excluir(uid: int, request: Request, user: Usuario = Depends(admin_requerido),
+                    db: Session = Depends(get_db)):
+    alvo = db.get(Usuario, uid)
+    erro = None
+    if not alvo:
+        erro = "Usuário não encontrado."
+    elif alvo.id == user.id:
+        erro = "Você não pode excluir o próprio usuário."
+    elif alvo.admin and not db.scalar(select(func.count(Usuario.id)).where(Usuario.admin.is_(True), Usuario.id != alvo.id)):
+        erro = "Não é possível excluir o único administrador."
+    if erro:
+        lista = db.scalars(select(Usuario).order_by(Usuario.username)).all()
+        return render(request, "usuarios.html", user, lista=lista, pagina="usuarios", erro=erro)
+    db.delete(alvo)
     db.commit()
     return RedirectResponse("/usuarios", status_code=303)
 

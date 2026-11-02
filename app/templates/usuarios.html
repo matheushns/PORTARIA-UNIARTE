@@ -11,7 +11,8 @@
     <td><div class="form-check"><input form="{{ f }}" type="checkbox" class="form-check-input" name="admin" {{ 'checked' if x.admin }}> admin</div></td>
     <td><div class="form-check"><input form="{{ f }}" type="checkbox" class="form-check-input" name="ativo" {{ 'checked' if x.ativo }}> ativo</div></td>
     <td><input form="{{ f }}" name="senha" type="password" placeholder="(manter)" class="form-control form-control-sm" autocomplete="new-password"></td>
-    <td><button form="{{ f }}" class="btn btn-sm btn-outline-primary">Salvar</button></td></tr>{% endfor %}
+    <td><div class="d-flex gap-1"><button form="{{ f }}" class="btn btn-sm btn-outline-primary" title="Salvar alterações"><i class="bi bi-pencil-square"></i> Salvar</button>
+      {% if x.id != user.id %}<button form="{{ f }}" type="submit" formaction="/usuarios/{{ x.id }}/excluir" formnovalidate class="btn btn-sm btn-outline-danger btn-excluir-usuario" data-nome="{{ x.username }}" title="Excluir usuário"><i class="bi bi-trash"></i> Excluir</button>{% endif %}</div></td></tr>{% endfor %}
 </table></div>
 <div class="card p-3"><h6>Novo usuário</h6>
 <form method="post" action="/usuarios/salvar" class="row g-2">
@@ -22,4 +23,16 @@
   <div class="col-md-1 form-check pt-2 ms-2"><input type="checkbox" class="form-check-input" name="admin" id="adm"><label for="adm" class="form-check-label">admin</label></div>
   <div class="col"><button class="btn btn-primary w-100">Criar</button></div>
 </form></div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-excluir-usuario').forEach(b => b.addEventListener('click', async function (e) {
+  e.preventDefault();
+  if (await confirmarBs('Excluir o usuário "' + this.dataset.nome + '"? Esta ação não pode ser desfeita.', 'Sim, excluir', true)) {
+    const f = document.getElementById(this.getAttribute('form'));
+    f.action = this.getAttribute('formaction');
+    f.submit();
+  }
+}));
+</script>
 {% endblock %}
