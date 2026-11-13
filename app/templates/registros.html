@@ -51,15 +51,14 @@
 {{ paginacao() }}
 
 <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-  <thead class="table-light"><tr>
+  <thead><tr>
     <th>Entrada</th><th>Tipo</th><th>Apto</th><th>Nome / Documento</th><th>Empresa / Placa</th><th>Porteiro(a)</th><th>Saída</th><th></th>
   </tr></thead>
   <tbody>
   {% for r in lista %}
   {% set cor_tipo = 'text-bg-primary' if r.tipo=='VISITANTE' else ('text-bg-warning' if r.tipo=='PRESTADOR' else 'text-bg-info') %}
-  {% set borda_tipo = 'border-primary' if r.tipo=='VISITANTE' else ('border-warning' if r.tipo=='PRESTADOR' else 'border-info') %}
   <tr>
-    <td class="text-nowrap border-start border-4 {{ borda_tipo }}">
+    <td class="text-nowrap">
       <div class="fw-medium">{{ r.entrada.strftime('%d/%m/%Y') }}</div>
       <div class="small text-muted"><i class="bi bi-box-arrow-in-right text-success"></i> {{ r.entrada.strftime('%H:%M') }}</div>
     </td>
