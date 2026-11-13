@@ -381,9 +381,10 @@ def registros(request: Request, q: str = "", tipo: str = "", de: str = "", ate: 
         stmt = stmt.where(Registro.entrada < d2 + timedelta(days=1))
     if apenas_abertos:
         stmt = stmt.where(Registro.saida.is_(None))
-    por_pg = 50
+    por_pg = 30
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    lista = db.scalars(stmt.order_by(Registro.entrada.desc()).limit(por_pg).offset((max(pg, 1) - 1) * por_pg)).all()
+    pg = min(max(pg, 1), max((total + por_pg - 1) // por_pg, 1))
+    lista = db.scalars(stmt.order_by(Registro.entrada.desc()).limit(por_pg).offset((pg - 1) * por_pg)).all()
     return render(request, "registros.html", user, lista=lista, q=q, tipo=tipo, de=de, ate=ate,
                   apenas_abertos=apenas_abertos, pg=pg, total=total, por_pg=por_pg, pagina="registros")
 
