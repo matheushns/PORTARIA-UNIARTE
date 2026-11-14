@@ -75,9 +75,34 @@
   {% endfor %}
 </div>
 
-<div id="visao-lista" class="card d-none"><div class="table-responsive"><table class="table table-hover mb-0">
+{% macro paginacao() %}
+{% set paginas = [((total + por_pg - 1) // por_pg), 1]|max %}
+{% set ini = ((pg - 1) * por_pg + 1) if total else 0 %}
+{% set fim = [pg * por_pg, total]|min %}
+{% set base = '?q=' ~ (q|urlencode) ~ '&bloco=' ~ bloco ~ '&apto=' ~ apto ~ '&pg=' %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 my-2">
+  <small class="text-muted">{% if total %}Mostrando {{ ini }}–{{ fim }} de {{ total }} unidades{% else %}Nenhuma unidade{% endif %}</small>
+  {% if paginas > 1 %}
+  <nav aria-label="Paginação"><ul class="pagination pagination-sm mb-0">
+    <li class="page-item {{ 'disabled' if pg <= 1 }}"><a class="page-link" href="{{ base }}{{ pg - 1 }}" aria-label="Anterior">&laquo;</a></li>
+    {% set janela = range(1, paginas + 1)|select('in', [1, paginas] + range(pg - 2, pg + 3)|list)|list %}
+    {% set ant = namespace(v=0) %}
+    {% for n in janela %}
+      {% if n - ant.v > 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      <li class="page-item {{ 'active' if n == pg }}"><a class="page-link" href="{{ base }}{{ n }}">{{ n }}</a></li>
+      {% set ant.v = n %}
+    {% endfor %}
+    <li class="page-item {{ 'disabled' if pg >= paginas }}"><a class="page-link" href="{{ base }}{{ pg + 1 }}" aria-label="Próxima">&raquo;</a></li>
+  </ul></nav>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div id="visao-lista" class="d-none">
+{{ paginacao() }}
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0">
   <thead><tr><th>Bloco/Apto</th><th>Responsável (Inquilino / Proprietário)</th><th>Telefone</th><th>Moradores</th><th>Veículos</th><th>Situação</th></tr></thead>
-  {% for u in lista %}<tr style="cursor:pointer" onclick="location='/unidades/{{ u.id }}'">
+  {% for u in lista_pg %}<tr style="cursor:pointer" onclick="location='/unidades/{{ u.id }}'">
     <td><a href="/unidades/{{ u.id }}" class="fw-semibold">{{ u.bloco_apto }}</a></td>
     <td>{% if u.inquilino %}{{ u.inquilino_nome or u.proprietario }} <span class="badge text-bg-info">Inquilino</span>{% else %}{{ u.proprietario }}{% endif %}</td>
     <td>{{ (u.inquilino_telefone or u.telefone) if u.inquilino else u.telefone }}</td>
@@ -86,6 +111,8 @@
     <td>{% if u.ativo %}<span class="badge text-bg-success">Ativo</span>{% else %}<span class="badge text-bg-secondary">Inativo</span>{% endif %}</td>
   </tr>{% else %}<tr><td colspan="6" class="text-center text-muted py-4">Nada encontrado.</td></tr>{% endfor %}
 </table></div></div>
+{{ paginacao() }}
+</div>
 {% endblock %}
 {% block scripts %}
 <script>

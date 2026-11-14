@@ -207,7 +207,7 @@ def painel(request: Request, user: Usuario = Depends(usuario_atual), db: Session
 
 # ------------------------------------------------------------------ unidades
 @app.get("/unidades", response_class=HTMLResponse)
-def unidades(request: Request, q: str = "", bloco: str = "", apto: str = "",
+def unidades(request: Request, q: str = "", bloco: str = "", apto: str = "", pg: int = 1,
              user: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
     stmt = select(Unidade).options(selectinload(Unidade.pessoas), selectinload(Unidade.veiculos))
     bloco = bloco.strip()
@@ -244,8 +244,13 @@ def unidades(request: Request, q: str = "", bloco: str = "", apto: str = "",
             itens = [(a, por_chave.get(f"{b}/{a}")) for a in (aptos_padrao + extras)]
         blocos_condominio[b] = itens
     blocos_lista = [f"{n:02d}" for n in range(1, 16)]
-    return render(request, "unidades.html", user, lista=lista, blocos=blocos_condominio,
-                  blocos_lista=blocos_lista, q=q, bloco=bloco, apto=apto, pagina="unidades")
+    por_pg = 30
+    total = len(lista)
+    pg = min(max(pg, 1), max((total + por_pg - 1) // por_pg, 1))
+    lista_pg = lista[(pg - 1) * por_pg: pg * por_pg]
+    return render(request, "unidades.html", user, lista=lista, lista_pg=lista_pg, blocos=blocos_condominio,
+                  blocos_lista=blocos_lista, q=q, bloco=bloco, apto=apto, pagina="unidades",
+                  pg=pg, por_pg=por_pg, total=total)
 
 
 def _so_se_valido(valor, permitidos) -> str:
