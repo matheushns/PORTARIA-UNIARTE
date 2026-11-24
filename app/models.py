@@ -116,3 +116,14 @@ class Registro(Base):
     autorizado_por: Mapped[str] = mapped_column(String(150), default="")
     observacoes: Mapped[str] = mapped_column(Text, default="")
     registrado_por: Mapped[str] = mapped_column(String(50), default="")
+
+
+class LogAtividade(Base):
+    """Auditoria simplificada. categoria: ACESSO (login/logout) ou MODIFICACAO (alterações nos dados)."""
+    __tablename__ = "logs_atividade"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quando: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    categoria: Mapped[str] = mapped_column(String(20), index=True)
+    usuario: Mapped[str] = mapped_column(String(120), default="")
+    acao: Mapped[str] = mapped_column(String(60), default="")
+    detalhe: Mapped[str] = mapped_column(String(500), default="")

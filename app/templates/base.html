@@ -53,6 +53,7 @@
       <li><a class="nav-link {{ 'active' if pagina=='registros' }}" href="/registros"><i class="bi bi-door-open"></i> Acessos</a></li>
       <li><a class="nav-link {{ 'active' if pagina=='unidades' }}" href="/unidades"><i class="bi bi-buildings"></i> Moradores</a></li>
       {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='usuarios' }}" href="/usuarios"><i class="bi bi-people"></i> Usuários</a></li>{% endif %}
+      {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='logs' }}" href="/logs"><i class="bi bi-journal-text"></i> Logs</a></li>{% endif %}
     </ul>
     <div class="sidebar-actions d-flex flex-column gap-2 mb-2">
       <div class="text-uppercase text-white-50 fw-semibold px-1" style="font-size: .68rem; letter-spacing: .08em;">Registrar Entrada</div>

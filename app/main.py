@@ -13,8 +13,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config
 from .database import Base, SessionLocal, engine, garantir_colunas, get_db
-from .models import (LIBERACOES, PARENTESCOS, TIPOS_PESSOA, TIPOS_REGISTRO, Pessoa, Registro, Unidade, Usuario,
-                     Veiculo)
+from .models import (LIBERACOES, PARENTESCOS, TIPOS_PESSOA, TIPOS_REGISTRO, LogAtividade, Pessoa, Registro,
+                     Unidade, Usuario, Veiculo)
 from .security import hash_senha, verificar_senha
 
 APTOS_PADRAO = [f"{andar}0{num}" for andar in range(1, 5) for num in range(1, 5)]
@@ -93,6 +93,18 @@ def _limpar_sessao_local():
         pass
 
 
+def registrar_log(db: Session, usuario, categoria: str, acao: str, detalhe: str = "", commit: bool = False):
+    """Grava uma linha de log. Nunca interrompe a operação principal."""
+    try:
+        nome = usuario if isinstance(usuario, str) else (usuario.username if usuario else "")
+        db.add(LogAtividade(quando=config.agora(), categoria=categoria, usuario=nome or "",
+                            acao=acao, detalhe=(detalhe or "")[:500]))
+        if commit:
+            db.commit()
+    except Exception:
+        db.rollback()
+
+
 # ---------------------------------------------------------------- autenticação
 class NaoAutenticado(Exception):
     pass
@@ -169,16 +181,22 @@ def login(request: Request, username: str = Form(...), senha: str = Form(...),
     user = db.scalar(select(Usuario).where(Usuario.username == username.strip().lower()))
     if not user or not user.ativo or not verificar_senha(senha, user.senha_hash):
         _tentativas[ip] = recentes + [agora]
+        registrar_log(db, username.strip().lower(), "ACESSO", "Login recusado", "Usuário ou senha inválidos", commit=True)
         return render(request, "login.html", erro="Usuário ou senha inválidos.")
     _tentativas.pop(ip, None)
     request.session.clear()
     request.session["uid"] = user.id
     request.session["boot"] = BOOT_ID
+    registrar_log(db, user, "ACESSO", "Login", "Entrou no sistema", commit=True)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/logout")
-def logout(request: Request):
+def logout(request: Request, db: Session = Depends(get_db)):
+    uid = request.session.get("uid")
+    quem = db.get(Usuario, uid) if uid else None
+    if quem:
+        registrar_log(db, quem, "ACESSO", "Logout", "Saiu do sistema", commit=True)
     request.session.clear()
     if _eh_local(request):
         _limpar_sessao_local()
@@ -345,6 +363,7 @@ async def unidade_salvar(request: Request, user: Usuario = Depends(usuario_atual
         return render(request, "unidade_form.html", user, u=u, pessoas=_slots_pessoas(u),
                       veiculos=_slots_veiculos(u), pagina="unidades", erro=erro)
 
+    registrar_log(db, user, "MODIFICACAO", "Unidade criada" if not uid else "Unidade editada", u.bloco_apto)
     db.add(u)
     db.commit()
     return RedirectResponse("/unidades", status_code=303)
@@ -354,6 +373,7 @@ async def unidade_salvar(request: Request, user: Usuario = Depends(usuario_atual
 def unidade_excluir(uid: int, user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
     u = db.get(Unidade, uid)
     if u:
+        registrar_log(db, user, "MODIFICACAO", "Unidade excluída", f"{u.bloco_apto} - {u.proprietario}")
         db.delete(u)
         db.commit()
     return RedirectResponse("/unidades", status_code=303)
@@ -446,6 +466,8 @@ async def registro_salvar(request: Request, user: Usuario = Depends(usuario_atua
         db.expunge_all()
         return render(request, "registro_form.html", user, r=r, blocos=_mapa_blocos(db),
                       pagina="registros", erro="Preencha Bloco/Apto, Nome e CPF antes de finalizar o cadastro.")
+    registrar_log(db, user, "MODIFICACAO", "Acesso criado" if not rid else "Acesso editado",
+                  f"{TIPOS_REGISTRO.get(r.tipo, r.tipo)} - {r.nome} ({r.bloco_apto})")
     db.add(r)
     db.commit()
     return RedirectResponse("/registros", status_code=303)
@@ -457,6 +479,7 @@ def registro_saida(rid: int, request: Request, user: Usuario = Depends(usuario_a
     r = db.get(Registro, rid)
     if r and not r.saida:
         r.saida = config.agora()
+        registrar_log(db, user, "MODIFICACAO", "Saída registrada", f"{r.nome} ({r.bloco_apto})")
         db.commit()
     return RedirectResponse(request.headers.get("referer") or "/registros", status_code=303)
 
@@ -465,6 +488,7 @@ def registro_saida(rid: int, request: Request, user: Usuario = Depends(usuario_a
 def registro_excluir(rid: int, request: Request, user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
     r = db.get(Registro, rid)
     if r:
+        registrar_log(db, user, "MODIFICACAO", "Acesso excluído", f"{r.nome} ({r.bloco_apto})")
         db.delete(r)
         db.commit()
     return RedirectResponse("/registros", status_code=303)
@@ -511,6 +535,7 @@ def usuario_salvar(request: Request, username: str = Form(...), nome: str = Form
         lista = db.scalars(select(Usuario).order_by(Usuario.username)).all()
         return render(request, "usuarios.html", user, lista=lista, pagina="usuarios",
                       erro="Usuário inválido/duplicado ou senha com menos de 6 caracteres.")
+    novo_usuario = alvo is None
     alvo = alvo or Usuario()
     alvo.username, alvo.nome = username, nome.strip().upper()
     alvo.admin, alvo.ativo = _bool(admin), _bool(ativo)
@@ -518,6 +543,8 @@ def usuario_salvar(request: Request, username: str = Form(...), nome: str = Form
         alvo.admin, alvo.ativo = True, True
     if senha:
         alvo.senha_hash = hash_senha(senha)
+    registrar_log(db, user, "MODIFICACAO", "Usuário criado" if novo_usuario else "Usuário editado",
+                  username + (" (senha alterada)" if senha and not novo_usuario else ""))
     db.add(alvo)
     db.commit()
     return RedirectResponse("/usuarios", status_code=303)
@@ -537,9 +564,29 @@ def usuario_excluir(uid: int, request: Request, user: Usuario = Depends(admin_re
     if erro:
         lista = db.scalars(select(Usuario).order_by(Usuario.username)).all()
         return render(request, "usuarios.html", user, lista=lista, pagina="usuarios", erro=erro)
+    registrar_log(db, user, "MODIFICACAO", "Usuário excluído", alvo.username)
     db.delete(alvo)
     db.commit()
     return RedirectResponse("/usuarios", status_code=303)
+
+
+@app.get("/logs", response_class=HTMLResponse)
+def logs(request: Request, aba: str = "acessos", q: str = "", pg: int = 1,
+         user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
+    aba = aba if aba in ("acessos", "modificacoes") else "acessos"
+    categoria = "ACESSO" if aba == "acessos" else "MODIFICACAO"
+    stmt = select(LogAtividade).where(LogAtividade.categoria == categoria)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(LogAtividade.usuario.ilike(like), LogAtividade.acao.ilike(like),
+                              LogAtividade.detalhe.ilike(like)))
+    por_pg = 30
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    pg = min(max(pg, 1), max((total + por_pg - 1) // por_pg, 1))
+    lista = db.scalars(stmt.order_by(LogAtividade.quando.desc(), LogAtividade.id.desc())
+                       .limit(por_pg).offset((pg - 1) * por_pg)).all()
+    return render(request, "logs.html", user, lista=lista, aba=aba, q=q, pg=pg, total=total,
+                  por_pg=por_pg, pagina="logs")
 
 
 # --------------------------------------------------------------- atualizações

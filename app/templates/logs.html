@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+{% set paginas = [((total + por_pg - 1) // por_pg), 1]|max %}
+{% set ini = ((pg - 1) * por_pg + 1) if total else 0 %}
+{% set fim = [pg * por_pg, total]|min %}
+<div class="mb-3">
+  <h3 class="mb-0">Logs <small class="text-muted fs-6">(somente administradores)</small></h3>
+  <small class="text-muted">Registro simplificado de acessos ao sistema e de modificações nos dados</small>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link {{ 'active' if aba=='acessos' }}" href="/logs?aba=acessos"><i class="bi bi-box-arrow-in-right"></i> Acessos ao sistema</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if aba=='modificacoes' }}" href="/logs?aba=modificacoes"><i class="bi bi-pencil-square"></i> Modificações no banco</a></li>
+</ul>
+
+<form class="mb-3"><input type="hidden" name="aba" value="{{ aba }}">
+  <div class="input-group">
+    <input name="q" value="{{ q }}" class="form-control" placeholder="Buscar por usuário, ação ou detalhe...">
+    {% if q %}<a href="/logs?aba={{ aba }}" class="btn btn-outline-secondary" title="Limpar"><i class="bi bi-x-lg"></i></a>{% endif %}
+    <button class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+  </div>
+</form>
+
+{% macro paginacao() %}
+{% set base = '?aba=' ~ aba ~ '&q=' ~ (q|urlencode) ~ '&pg=' %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 my-2">
+  <small class="text-muted">{% if total %}Mostrando {{ ini }}–{{ fim }} de {{ total }} registros{% else %}Nenhum registro{% endif %}</small>
+  {% if paginas > 1 %}
+  <nav aria-label="Paginação"><ul class="pagination pagination-sm mb-0">
+    <li class="page-item {{ 'disabled' if pg <= 1 }}"><a class="page-link" href="{{ base }}{{ pg - 1 }}">&laquo;</a></li>
+    {% set janela = range(1, paginas + 1)|select('in', [1, paginas] + range(pg - 2, pg + 3)|list)|list %}
+    {% set ant = namespace(v=0) %}
+    {% for n in janela %}
+      {% if n - ant.v > 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      <li class="page-item {{ 'active' if n == pg }}"><a class="page-link" href="{{ base }}{{ n }}">{{ n }}</a></li>
+      {% set ant.v = n %}
+    {% endfor %}
+    <li class="page-item {{ 'disabled' if pg >= paginas }}"><a class="page-link" href="{{ base }}{{ pg + 1 }}">&raquo;</a></li>
+  </ul></nav>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{{ paginacao() }}
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+  <thead><tr><th>Data / Hora</th><th>Usuário</th><th>Ação</th><th>Detalhe</th></tr></thead>
+  <tbody>
+  {% for l in lista %}
+  <tr>
+    <td class="text-nowrap">{{ l.quando.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+    <td class="fw-medium">{{ l.usuario or '—' }}</td>
+    <td>{% set neg = 'recusado' in l.acao or 'excluíd' in l.acao %}<span class="badge {{ 'text-bg-danger' if neg else ('text-bg-success' if l.acao in ('Login',) or 'criad' in l.acao else 'text-bg-secondary') }}">{{ l.acao }}</span></td>
+    <td class="small text-muted">{{ l.detalhe }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="text-center text-muted py-4">Nenhum registro de log.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+{{ paginacao() }}
+{% endblock %}
