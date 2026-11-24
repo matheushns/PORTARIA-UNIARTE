@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(os.getenv("ENV_FILE") or ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/portaria.db")
 if DATABASE_URL.startswith("postgres://"):
@@ -19,6 +19,12 @@ if (
 ):
     sep = "&" if "?" in DATABASE_URL else "?"
     DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
+
+# Modo BETA (branch de testes): nunca pode usar o banco de produção.
+BETA = bool(os.getenv("PORTARIA_BETA"))
+if BETA and not DATABASE_URL.startswith("sqlite"):
+    raise RuntimeError("Modo BETA exige banco SQLite local (DATABASE_URL=sqlite:///...). "
+                       "Recusando iniciar para proteger o banco de produção.")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-key")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")

@@ -36,6 +36,8 @@ GITHUB_BRANCH = "master"
 
 def verificar_e_atualizar():
     """Consulta o último commit no GitHub via feed Atom (sem rate limit de API) e atualiza `app_atualizado/app`."""
+    if os.getenv("PORTARIA_BETA"):
+        return
     try:
         req = urllib.request.Request(
             f"https://github.com/{GITHUB_REPO}/commits/{GITHUB_BRANCH}.atom",
@@ -283,7 +285,7 @@ def main():
     servidor_ref = {"instancia": None}
 
     janela = webview.create_window(
-        title="Portaria UNIARTE",
+        title="Portaria UNIARTE [BETA - TESTES]" if os.getenv("PORTARIA_BETA") else "Portaria UNIARTE",
         html=SPLASH_HTML,
         width=1360,
         height=840,

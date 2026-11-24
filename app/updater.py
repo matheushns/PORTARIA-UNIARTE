@@ -123,6 +123,11 @@ def _obter_ultima_release_web(timeout: float = 5.0) -> tuple[str, str]:
 
 def consultar_status_remoto(timeout: float = 5.0, forcar: bool = False) -> dict:
     """Retorna informações sobre atualizações disponíveis (código e instalador completo)."""
+    if os.getenv("PORTARIA_BETA"):  # versão beta não se atualiza a partir do master
+        return {"ok": True, "commit_local": "beta", "commit_remoto": "", "commit_mensagem": "", "commit_data": "",
+                "tem_atualizacao_codigo": False, "versao_instalador_local": "beta",
+                "versao_instalador_remota": "beta", "instalador_url": "", "instalador_notas": "",
+                "tem_atualizacao_instalador": False}
     agora = time.time()
     if not forcar and _CACHE_STATUS["dados"] is not None and (agora - _CACHE_STATUS["ts"] < _CACHE_TTL):
         return dict(_CACHE_STATUS["dados"])
@@ -178,6 +183,8 @@ def consultar_status_remoto(timeout: float = 5.0, forcar: bool = False) -> dict:
 
 def aplicar_atualizacao_codigo(sha_esperado: str = "") -> dict:
     """Baixa o zip da branch master e atualiza `app/` local."""
+    if os.getenv("PORTARIA_BETA"):
+        return {"ok": False, "mensagem": "Versão BETA não recebe atualizações automáticas."}
     try:
         if not sha_esperado:
             st = consultar_status_remoto(timeout=6.0, forcar=True)
@@ -250,6 +257,8 @@ def _encerrar_processo_atual(atraso: float = 0.4):
 
 def baixar_e_executar_instalador(url_exe: str, nova_versao: str = "") -> dict:
     """Baixa o Instalador_PortariaUNIARTE_Setup.exe da Release, inicia de forma independente e fecha o app atual."""
+    if os.getenv("PORTARIA_BETA"):
+        return {"ok": False, "mensagem": "Versão BETA não recebe atualizações automáticas."}
     if not url_exe:
         return {"ok": False, "mensagem": "Nenhum instalador (.exe) encontrado na Release do GitHub."}
     try:
