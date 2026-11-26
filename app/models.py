@@ -10,6 +10,8 @@ TIPOS_REGISTRO = {"VISITANTE": "Visitante", "PRESTADOR": "Prestador", "ENTREGA":
 PARENTESCOS = ["PAI", "MÃE", "FILHO(A)", "IRMÃ(O)", "ESPOSO(A)", "PRIMO(A)", "TIO(A)", "VÔ(Ó)",
                "SOGRO(A)", "GENRO", "NORA", "AMIGO(A)"]
 LIBERACOES = ["LIBERADO", "NÃO LIBERADO"]
+ORIGENS_CORRESPONDENCIA = ["Mercado Livre", "Shopee", "Amazon", "Shein", "Magazine Luiza", "AliExpress",
+                          "Americanas", "Correios", "Transportadora", "iFood / Delivery", "Farmácia", "Outros"]
 TIPOS_PESSOA = {"MORADOR": "Morador/Inquilino", "AUTORIZADO": "Autorizado", "DIARISTA": "Diarista"}
 
 
@@ -127,3 +129,23 @@ class LogAtividade(Base):
     usuario: Mapped[str] = mapped_column(String(120), default="")
     acao: Mapped[str] = mapped_column(String(60), default="")
     detalhe: Mapped[str] = mapped_column(String(500), default="")
+
+
+class Correspondencia(Base):
+    """Encomenda recebida na portaria, guardada até a retirada pelo morador."""
+    __tablename__ = "correspondencias"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recebida_em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
+    codigo_barras: Mapped[str] = mapped_column(String(120), default="", index=True)
+    origem: Mapped[str] = mapped_column(String(80), default="")
+    descricao: Mapped[str] = mapped_column(String(300), default="")
+    volumes: Mapped[int] = mapped_column(default=1)
+    bloco_apto: Mapped[str] = mapped_column(String(20), default="", index=True)
+    destinatario: Mapped[str] = mapped_column(String(200), default="")
+    telefone: Mapped[str] = mapped_column(String(40), default="")
+    observacoes: Mapped[str] = mapped_column(Text, default="")
+    recebido_por: Mapped[str] = mapped_column(String(120), default="")
+    avisado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    retirada_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    retirado_por: Mapped[str] = mapped_column(String(200), default="")
+    entregue_por: Mapped[str] = mapped_column(String(120), default="")

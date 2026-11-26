@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+{% set paginas = [((total + por_pg - 1) // por_pg), 1]|max %}
+{% set ini = ((pg - 1) * por_pg + 1) if total else 0 %}
+{% set fim = [pg * por_pg, total]|min %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h3 class="mb-0">Correspondência <small class="text-muted fs-6">({{ total }})</small>
+      {% if pendentes %}<span class="badge text-bg-warning fs-6 ms-1" title="Encomendas aguardando retirada"><i class="bi bi-box-seam"></i> {{ pendentes }} aguardando retirada</span>{% endif %}</h3>
+    <small class="text-muted">Encomendas recebidas na portaria e guardadas para os moradores</small>
+  </div>
+  <a href="/correspondencias/nova" class="btn btn-primary shadow-sm"><i class="bi bi-plus-lg"></i> Nova encomenda</a>
+</div>
+
+<form class="card p-3 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label small text-muted mb-1">Busca rápida</label><input name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Nome, apto, código de barras, produto..."></div>
+    <div class="col-md-2"><label class="form-label small text-muted mb-1">Situação</label><select name="status" class="form-select form-select-sm">
+      <option value="pendente" {{ 'selected' if status=='pendente' }}>Aguardando retirada</option>
+      <option value="retirada" {{ 'selected' if status=='retirada' }}>Já retiradas</option>
+      <option value="todas" {{ 'selected' if status=='todas' }}>Todas</option></select></div>
+    <div class="col-md-2"><label class="form-label small text-muted mb-1">Origem</label><select name="origem" class="form-select form-select-sm"><option value="">Todas</option>
+      {% for o in ORIGENS_CORRESPONDENCIA %}<option value="{{ o }}" {{ 'selected' if origem==o }}>{{ o }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label small text-muted mb-1">De</label><input type="date" name="de" value="{{ de }}" class="form-control form-control-sm"></div>
+    <div class="col-md-2"><label class="form-label small text-muted mb-1">Até</label><input type="date" name="ate" value="{{ ate }}" class="form-control form-control-sm"></div>
+    <div class="col d-flex gap-1">
+      <button class="btn btn-sm btn-primary flex-grow-1" title="Filtrar"><i class="bi bi-funnel-fill"></i></button>
+      {% if q or origem or de or ate or status != 'pendente' %}<a href="/correspondencias" class="btn btn-sm btn-outline-secondary" title="Limpar filtros"><i class="bi bi-x-lg"></i></a>{% endif %}
+    </div>
+  </div>
+</form>
+
+{% macro paginacao() %}
+{% set base = '?q=' ~ (q|urlencode) ~ '&status=' ~ status ~ '&origem=' ~ (origem|urlencode) ~ '&de=' ~ de ~ '&ate=' ~ ate ~ '&pg=' %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 my-2">
+  <small class="text-muted">{% if total %}Mostrando {{ ini }}–{{ fim }} de {{ total }} encomendas{% else %}Nenhuma encomenda{% endif %}</small>
+  {% if paginas > 1 %}
+  <nav aria-label="Paginação"><ul class="pagination pagination-sm mb-0">
+    <li class="page-item {{ 'disabled' if pg <= 1 }}"><a class="page-link" href="{{ base }}{{ pg - 1 }}">&laquo;</a></li>
+    {% set janela = range(1, paginas + 1)|select('in', [1, paginas] + range(pg - 2, pg + 3)|list)|list %}
+    {% set ant = namespace(v=0) %}
+    {% for n in janela %}
+      {% if n - ant.v > 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      <li class="page-item {{ 'active' if n == pg }}"><a class="page-link" href="{{ base }}{{ n }}">{{ n }}</a></li>
+      {% set ant.v = n %}
+    {% endfor %}
+    <li class="page-item {{ 'disabled' if pg >= paginas }}"><a class="page-link" href="{{ base }}{{ pg + 1 }}">&raquo;</a></li>
+  </ul></nav>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{{ paginacao() }}
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+  <thead><tr><th>Recebida</th><th>Apto</th><th>Destinatário</th><th>Produto</th><th>Recebido por</th><th>Situação</th><th class="text-end">Ações</th></tr></thead>
+  <tbody>
+  {% for c in lista %}
+  {% set wa = link_whats(c.telefone, msg_correspondencia(c)) %}
+  <tr>
+    <td class="text-nowrap">
+      <div class="fw-medium">{{ c.recebida_em.strftime('%d/%m/%Y') }}</div>
+      <div class="small text-muted"><i class="bi bi-clock"></i> {{ c.recebida_em.strftime('%H:%M') }}</div>
+    </td>
+    <td class="text-nowrap">{% if c.bloco_apto %}<a href="#" data-unidade="{{ c.bloco_apto }}" class="fw-semibold text-decoration-none" title="Ver informações da unidade"><i class="bi bi-building"></i> {{ c.bloco_apto }}</a>{% else %}—{% endif %}</td>
+    <td>
+      <div class="fw-semibold">{{ c.destinatario or '—' }}</div>
+      {% if c.telefone %}<div class="small text-muted"><i class="bi bi-telephone"></i> {{ c.telefone }}</div>{% endif %}
+    </td>
+    <td>
+      <div>{{ c.descricao or '—' }}{% if c.volumes and c.volumes > 1 %} <span class="badge text-bg-light border">{{ c.volumes }} volumes</span>{% endif %}</div>
+      <div class="small text-muted">{% if c.origem %}<span class="badge text-bg-info">{{ c.origem }}</span> {% endif %}{% if c.codigo_barras %}<i class="bi bi-upc-scan"></i> {{ c.codigo_barras }}{% endif %}</div>
+    </td>
+    <td class="small text-muted">{{ c.recebido_por or '—' }}</td>
+    <td class="text-nowrap">
+      {% if c.retirada_em %}
+        <span class="badge text-bg-success"><i class="bi bi-check2-circle"></i> Retirada</span>
+        <div class="small text-muted">{{ c.retirada_em.strftime('%d/%m %H:%M') }}{% if c.retirado_por %} · {{ c.retirado_por }}{% endif %}</div>
+      {% else %}
+        {% set dias = dias_pendente(c) %}
+        <span class="badge {{ 'text-bg-danger' if dias >= 7 else 'text-bg-warning' }}"><i class="bi bi-hourglass-split"></i> {{ 'Hoje' if dias == 0 else ('há ' ~ dias ~ ' dia' ~ ('s' if dias > 1 else '')) }}</span>
+        {% if c.avisado_em %}<div class="small text-success"><i class="bi bi-whatsapp"></i> avisado {{ c.avisado_em.strftime('%d/%m %H:%M') }}</div>{% endif %}
+      {% endif %}
+    </td>
+    <td class="text-end text-nowrap">
+      {% if not c.retirada_em %}
+        {% if wa %}<a href="{{ wa }}" target="_blank" rel="noopener" class="btn btn-sm btn-success py-0" title="Avisar o morador no WhatsApp" onclick="fetch('/correspondencias/{{ c.id }}/avisar',{method:'POST'})"><i class="bi bi-whatsapp"></i></a>
+        {% else %}<span class="btn btn-sm btn-outline-secondary py-0 disabled" title="Sem celular válido para WhatsApp"><i class="bi bi-whatsapp"></i></span>{% endif %}
+        <form method="post" action="/correspondencias/{{ c.id }}/retirar" class="d-inline" data-confirm="Confirmar a entrega da encomenda de {{ c.destinatario }}?" data-confirm-btn="Registrar entrega"><button class="btn btn-sm btn-primary py-0" title="Registrar entrega ao morador"><i class="bi bi-box-arrow-right"></i> Entregar</button></form>
+      {% endif %}
+      <a href="/correspondencias/{{ c.id }}" class="btn btn-sm btn-outline-secondary py-0" title="Editar"><i class="bi bi-pencil"></i></a>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma encomenda encontrada.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+{{ paginacao() }}
+{% endblock %}

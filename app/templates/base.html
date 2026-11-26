@@ -51,6 +51,7 @@
     <ul class="nav nav-pills flex-column gap-1 mb-auto">
       <li><a class="nav-link {{ 'active' if pagina=='painel' }}" href="/"><i class="bi bi-speedometer2"></i> Painel</a></li>
       <li><a class="nav-link {{ 'active' if pagina=='registros' }}" href="/registros"><i class="bi bi-door-open"></i> Acessos</a></li>
+      <li><a class="nav-link {{ 'active' if pagina=='correspondencias' }}" href="/correspondencias"><i class="bi bi-box-seam"></i> Correspondência</a></li>
       <li><a class="nav-link {{ 'active' if pagina=='unidades' }}" href="/unidades"><i class="bi bi-buildings"></i> Moradores</a></li>
       {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='usuarios' }}" href="/usuarios"><i class="bi bi-people"></i> Usuários</a></li>{% endif %}
       {% if user.admin %}<li><a class="nav-link {{ 'active' if pagina=='logs' }}" href="/logs"><i class="bi bi-journal-text"></i> Logs</a></li>{% endif %}

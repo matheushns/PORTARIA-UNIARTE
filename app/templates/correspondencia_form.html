@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% macro campo(nome, rotulo, valor, cols='col-md-4', extra='') %}
+<div class="{{ cols }}"><label class="form-label small mb-0">{{ rotulo }}</label>
+<input class="form-control" name="{{ nome }}" id="{{ nome }}" value="{{ valor or '' }}" {{ extra|safe }}></div>
+{% endmacro %}
+{% block content %}
+{% set wa = link_whats(c.telefone, msg_correspondencia(c)) if c.id else '' %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/correspondencias" class="btn btn-outline-secondary btn-sm" title="Voltar para Correspondência"><i class="bi bi-arrow-left"></i> Voltar</a>
+  <h3 class="mb-0">{{ 'Editar encomenda' if c.id else 'Nova encomenda' }}</h3>
+  {% if c.id and wa %}<a href="{{ wa }}" target="_blank" rel="noopener" class="btn btn-sm btn-success ms-auto" onclick="fetch('/correspondencias/{{ c.id }}/avisar',{method:'POST'})"><i class="bi bi-whatsapp"></i> Avisar morador</a>{% endif %}
+</div>
+{% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+<form method="post" action="/correspondencias/salvar" class="card p-3" id="form-corresp">
+  {% if c.id %}<input type="hidden" name="id" value="{{ c.id }}">{% endif %}
+  <div class="row g-3">
+    {{ campo('codigo_barras','Código de barras (use o leitor)',c.codigo_barras,'col-md-5','autofocus autocomplete="off" placeholder="Passe o leitor na etiqueta"') }}
+    <div class="col-md-4"><label class="form-label small mb-0">Origem (loja / transportadora)</label>
+      <input class="form-control" name="origem" id="origem" list="lista-origens" value="{{ c.origem or '' }}" autocomplete="off" placeholder="Mercado Livre, Shopee...">
+      <datalist id="lista-origens">{% for o in ORIGENS_CORRESPONDENCIA %}<option value="{{ o }}">{% endfor %}</datalist></div>
+    {{ campo('volumes','Volumes',c.volumes or 1,'col-md-1','type="number" min="1" max="99"') }}
+    {{ campo('recebida_em','Recebida em',c.recebida_em.strftime('%Y-%m-%dT%H:%M') if c.recebida_em,'col-md-2','type="datetime-local"') }}
+    {{ campo('descricao','O que é o produto',c.descricao,'col-md-12','placeholder="Ex.: caixa média, envelope, pacote pequeno..."') }}
+    <div class="col-md-3"><label class="form-label small mb-0">Bloco / Apartamento *</label>
+      <div class="input-group">
+        <select id="sel_bloco" class="form-select" required aria-label="Bloco"><option value="">Bloco</option>{% for b in blocos %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select>
+        <select id="sel_apto" class="form-select" required disabled aria-label="Apartamento"><option value="">Apto</option></select>
+      </div>
+      <input type="hidden" name="bloco_apto" id="bloco_apto" value="{{ c.bloco_apto or '' }}"></div>
+    <div class="col-md-6"><label class="form-label small mb-0">Destinatário (dono da encomenda) *</label>
+      <input class="form-control" name="destinatario" id="destinatario" list="lista-moradores" value="{{ c.destinatario or '' }}" required autocomplete="off" placeholder="Escolha o apto para ver os moradores">
+      <datalist id="lista-moradores"></datalist></div>
+    {{ campo('telefone','Telefone / WhatsApp do destinatário',c.telefone,'col-md-3') }}
+    <div class="col-12"><div id="info-unidade" class="alert alert-info py-2 d-none mb-0"></div></div>
+    <div class="col-12"><label class="form-label small mb-0">Observações</label><textarea name="observacoes" class="form-control" rows="2" placeholder="Ex.: frágil, perecível, avisar por interfone...">{{ c.observacoes or '' }}</textarea></div>
+    {% if c.id %}
+    <div class="col-12"><hr class="my-1"><div class="small text-muted mb-2">Retirada — deixe vazio se a encomenda ainda está na portaria.</div></div>
+    {{ campo('retirada_em','Retirada em',c.retirada_em.strftime('%Y-%m-%dT%H:%M') if c.retirada_em,'col-md-3','type="datetime-local"') }}
+    {{ campo('retirado_por','Retirado por (nome)',c.retirado_por,'col-md-5') }}
+    {% endif %}
+    <div class="col-12"><div class="small text-muted"><i class="bi bi-person-badge"></i> Recebido por — Porteiro(a): <strong>{{ c.recebido_por or user.nome or user.username }}</strong>{% if c.entregue_por %} · Entregue por: <strong>{{ c.entregue_por }}</strong>{% endif %}</div></div>
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+    <a href="/correspondencias" class="btn btn-outline-secondary">Cancelar</a>
+    {% if c.id and user.admin %}<button class="btn btn-outline-danger ms-auto" formaction="/correspondencias/{{ c.id }}/excluir" formnovalidate id="btn-excluir-corresp">Excluir</button>{% endif %}
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const campoApto = document.getElementById('bloco_apto'), info = document.getElementById('info-unidade');
+const inpDest = document.getElementById('destinatario'), inpTel = document.getElementById('telefone');
+const dlMor = document.getElementById('lista-moradores');
+let seqConsulta = 0, pessoasUnidade = {};   // nome -> telefone
+
+// Leitor de código de barras envia ENTER no final: não envia o formulário, vai para o próximo campo.
+document.getElementById('codigo_barras').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('origem').focus(); }
+});
+
+inpDest.addEventListener('input', () => {
+  const t = pessoasUnidade[inpDest.value.trim().toUpperCase()];
+  if (t !== undefined && t && !inpTel.value.trim()) inpTel.value = t, inpTel.dispatchEvent(new Event('input'));
+});
+inpDest.addEventListener('change', () => {
+  const t = pessoasUnidade[inpDest.value.trim().toUpperCase()];
+  if (t) { inpTel.value = t; inpTel.dispatchEvent(new Event('input')); }
+});
+
+async function consulta() {
+  const minha = ++seqConsulta;
+  const v = campoApto.value.trim();
+  dlMor.innerHTML = ''; pessoasUnidade = {};
+  if (!v) { info.classList.add('d-none'); return; }
+  info.className = 'alert alert-info py-2 mb-0';
+  info.innerHTML =
+    '<div class="d-flex align-items-center gap-2 mb-1 small fw-semibold">' +
+      '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>' +
+      '<span>Buscando informações dos moradores de <b>' + v + '</b> no banco de dados...</span>' +
+    '</div>' +
+    '<div class="progress" style="height: 6px;"><div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div></div>';
+  try {
+    const r = await fetch('/api/unidade/' + encodeURIComponent(v));
+    const d = await r.json();
+    if (minha !== seqConsulta) return;
+    if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada. Digite o nome do destinatário manualmente.'; return; }
+    const respNome = d.inquilino ? (d.inquilino_nome || d.proprietario) : d.proprietario;
+    const respTel = d.inquilino ? (d.inquilino_telefone || d.telefone) : d.telefone;
+    const add = (n, t) => { if (!n) return; const k = n.toUpperCase(); if (!(k in pessoasUnidade)) { pessoasUnidade[k] = t || respTel || ''; dlMor.appendChild(new Option(k, k)); } };
+    add(respNome, respTel);
+    if (d.inquilino) add(d.proprietario, d.telefone);
+    d.pessoas.filter(p => p.tipo !== 'DIARISTA').forEach(p => add(p.nome, p.telefone));
+    if (!inpDest.value.trim() && respNome) { inpDest.value = respNome.toUpperCase(); if (respTel && !inpTel.value.trim()) { inpTel.value = respTel; inpTel.dispatchEvent(new Event('input')); } }
+    info.className = 'alert alert-info py-2 mb-0';
+    info.innerHTML = '<a href="#" data-unidade="' + v + '" class="btn btn-sm btn-outline-primary float-end"><i class="bi bi-eye"></i> Ver detalhes</a><b>' +
+      (d.inquilino ? 'Inquilino: ' : 'Proprietário: ') + (respNome || '—') + '</b>' + (d.ativo ? '' : ' <span class="badge text-bg-warning">inativo</span>') +
+      '<br><small>Escolha o destinatário na lista do campo acima (moradores desta unidade).</small>';
+  } catch (e) {
+    if (minha !== seqConsulta) return;
+    info.className = 'alert alert-danger py-2 mb-0';
+    info.textContent = 'Erro ao buscar informações da unidade no banco de dados.';
+  }
+}
+
+// Combos encadeados: o apartamento só é carregado depois de escolher o bloco.
+const MAPA = {{ blocos|tojson }};
+const selBloco = document.getElementById('sel_bloco'), selApto = document.getElementById('sel_apto');
+function carregaAptos(bloco, aptoSel) {
+  selApto.innerHTML = '<option value="">Apto</option>';
+  const lista = MAPA[bloco] || [];
+  lista.forEach(a => selApto.add(new Option(a, a)));
+  if (aptoSel && !lista.includes(aptoSel)) selApto.add(new Option(aptoSel, aptoSel));
+  selApto.disabled = !bloco;
+  selApto.value = aptoSel || '';
+}
+function atualiza() {
+  campoApto.value = (selBloco.value && selApto.value) ? selBloco.value + '/' + selApto.value : '';
+  consulta();
+}
+selBloco.addEventListener('change', () => { carregaAptos(selBloco.value, ''); atualiza(); });
+selApto.addEventListener('change', atualiza);
+const [b0, a0] = (campoApto.value || '').split('/');
+if (b0) {
+  if (!MAPA[b0]) selBloco.add(new Option(b0, b0));
+  selBloco.value = b0; carregaAptos(b0, a0);
+}
+consulta();
+
+const btnExc = document.getElementById('btn-excluir-corresp');
+if (btnExc) {
+  btnExc.addEventListener('click', async function (e) {
+    e.preventDefault();
+    if (await confirmarBs('Tem certeza que deseja excluir este registro de encomenda?', 'Sim, excluir', true)) {
+      const f = this.closest('form');
+      f.action = this.getAttribute('formaction');
+      f.noValidate = true;
+      if (window.mostrarCarregando) window.mostrarCarregando('Excluindo encomenda...');
+      f.submit();
+    }
+  });
+}
+</script>
+{% endblock %}

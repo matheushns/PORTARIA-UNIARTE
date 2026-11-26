@@ -2,6 +2,7 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, time, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -13,8 +14,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config
 from .database import Base, SessionLocal, engine, garantir_colunas, get_db
-from .models import (LIBERACOES, PARENTESCOS, TIPOS_PESSOA, TIPOS_REGISTRO, LogAtividade, Pessoa, Registro,
-                     Unidade, Usuario, Veiculo)
+from .models import (LIBERACOES, ORIGENS_CORRESPONDENCIA, PARENTESCOS, TIPOS_PESSOA, TIPOS_REGISTRO,
+                     Correspondencia, LogAtividade, Pessoa, Registro, Unidade, Usuario, Veiculo)
 from .security import hash_senha, verificar_senha
 
 APTOS_PADRAO = [f"{andar}0{num}" for andar in range(1, 5) for num in range(1, 5)]
@@ -587,6 +588,155 @@ def logs(request: Request, aba: str = "acessos", q: str = "", pg: int = 1,
                        .limit(por_pg).offset((pg - 1) * por_pg)).all()
     return render(request, "logs.html", user, lista=lista, aba=aba, q=q, pg=pg, total=total,
                   por_pg=por_pg, pagina="logs")
+
+
+# ------------------------------------------------------------- correspondência
+def link_whats(telefone: str, mensagem: str = "") -> str:
+    """Link wa.me para celular brasileiro válido (vazio se for fixo/inválido)."""
+    d = re.sub(r"\D", "", telefone or "").lstrip("0")
+    if len(d) in (10, 11):
+        d = "55" + d
+    if not (len(d) == 13 and d.startswith("55") and d[4] == "9"):
+        return ""
+    return f"https://wa.me/{d}" + (f"?text={quote(mensagem)}" if mensagem else "")
+
+
+def msg_correspondencia(c: Correspondencia) -> str:
+    primeiro = (c.destinatario or "").split(" ")[0].capitalize() if c.destinatario else ""
+    produto = f" ({c.descricao.strip()})" if c.descricao and c.descricao.strip() else ""
+    origem = f" da {c.origem}" if c.origem and c.origem not in ("Outros",) else ""
+    return (f"Oi{', ' + primeiro if primeiro else ''}! Seu produto{origem}{produto} chegou na portaria. "
+            f"Pode retirar quando quiser. Obrigado!")
+
+
+def dias_pendente(c: Correspondencia) -> int:
+    return max((config.agora() - c.recebida_em).days, 0) if c.recebida_em else 0
+
+
+templates.env.globals.update(link_whats=link_whats, msg_correspondencia=msg_correspondencia,
+                             dias_pendente=dias_pendente, ORIGENS_CORRESPONDENCIA=ORIGENS_CORRESPONDENCIA)
+
+
+@app.get("/correspondencias", response_class=HTMLResponse)
+def correspondencias(request: Request, q: str = "", status: str = "pendente", origem: str = "",
+                     de: str = "", ate: str = "", pg: int = 1, user: Usuario = Depends(usuario_atual),
+                     db: Session = Depends(get_db)):
+    status = status if status in ("pendente", "retirada", "todas") else "pendente"
+    stmt = select(Correspondencia)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Correspondencia.destinatario.ilike(like), Correspondencia.codigo_barras.ilike(like),
+                              Correspondencia.bloco_apto.ilike(like), Correspondencia.descricao.ilike(like),
+                              Correspondencia.origem.ilike(like)))
+    if status == "pendente":
+        stmt = stmt.where(Correspondencia.retirada_em.is_(None))
+    elif status == "retirada":
+        stmt = stmt.where(Correspondencia.retirada_em.is_not(None))
+    if origem:
+        stmt = stmt.where(Correspondencia.origem == origem)
+    d1, d2 = _parse_data(de), _parse_data(ate)
+    if d1:
+        stmt = stmt.where(Correspondencia.recebida_em >= d1)
+    if d2:
+        stmt = stmt.where(Correspondencia.recebida_em < d2 + timedelta(days=1))
+    por_pg = 30
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    pg = min(max(pg, 1), max((total + por_pg - 1) // por_pg, 1))
+    lista = db.scalars(stmt.order_by(Correspondencia.recebida_em.desc())
+                       .limit(por_pg).offset((pg - 1) * por_pg)).all()
+    pendentes = db.scalar(select(func.count(Correspondencia.id)).where(Correspondencia.retirada_em.is_(None)))
+    return render(request, "correspondencias.html", user, lista=lista, q=q, status=status, origem=origem,
+                  de=de, ate=ate, pg=pg, total=total, por_pg=por_pg, pendentes=pendentes, pagina="correspondencias")
+
+
+@app.get("/correspondencias/nova", response_class=HTMLResponse)
+def correspondencia_nova(request: Request, user: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
+    c = Correspondencia(recebida_em=config.agora(), recebido_por=user.nome or user.username, volumes=1)
+    return render(request, "correspondencia_form.html", user, c=c, blocos=_mapa_blocos(db),
+                  pagina="correspondencias", erro=None)
+
+
+@app.get("/correspondencias/{cid}", response_class=HTMLResponse)
+def correspondencia_editar(cid: int, request: Request, user: Usuario = Depends(usuario_atual),
+                           db: Session = Depends(get_db)):
+    c = db.get(Correspondencia, cid)
+    if not c:
+        return RedirectResponse("/correspondencias", status_code=303)
+    return render(request, "correspondencia_form.html", user, c=c, blocos=_mapa_blocos(db),
+                  pagina="correspondencias", erro=None)
+
+
+def _dt_local(valor):
+    try:
+        return datetime.strptime(valor or "", "%Y-%m-%dT%H:%M")
+    except ValueError:
+        return None
+
+
+@app.post("/correspondencias/salvar")
+async def correspondencia_salvar(request: Request, user: Usuario = Depends(usuario_atual),
+                                 db: Session = Depends(get_db)):
+    f = await request.form()
+    cid = f.get("id")
+    novo = not cid
+    c = db.get(Correspondencia, int(cid)) if cid else Correspondencia(recebido_por=user.nome or user.username)
+    for campo in ("codigo_barras", "origem", "descricao", "bloco_apto", "destinatario", "telefone",
+                  "observacoes", "retirado_por"):
+        setattr(c, campo, (f.get(campo) or "").strip())
+    c.codigo_barras, c.bloco_apto, c.destinatario = c.codigo_barras.upper(), c.bloco_apto.upper(), c.destinatario.upper()
+    try:
+        c.volumes = min(max(int(f.get("volumes") or 1), 1), 99)
+    except ValueError:
+        c.volumes = 1
+    c.recebida_em = _dt_local(f.get("recebida_em")) or c.recebida_em or config.agora()
+    nova_retirada = _dt_local(f.get("retirada_em"))
+    if nova_retirada and not c.entregue_por:
+        c.entregue_por = user.nome or user.username
+    if not nova_retirada:
+        c.entregue_por, c.retirado_por = "", ""
+    c.retirada_em = nova_retirada
+    if not c.bloco_apto or not c.destinatario:
+        db.expunge_all()
+        return render(request, "correspondencia_form.html", user, c=c, blocos=_mapa_blocos(db),
+                      pagina="correspondencias", erro="Informe o Bloco/Apto e o destinatário da encomenda.")
+    registrar_log(db, user, "MODIFICACAO", "Correspondência recebida" if novo else "Correspondência editada",
+                  f"{c.destinatario} ({c.bloco_apto}) - {c.descricao or c.origem or 'sem descrição'}")
+    db.add(c)
+    db.commit()
+    return RedirectResponse("/correspondencias", status_code=303)
+
+
+@app.post("/correspondencias/{cid}/retirar")
+def correspondencia_retirar(cid: int, request: Request, retirado_por: str = Form(""),
+                            user: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
+    c = db.get(Correspondencia, cid)
+    if c and not c.retirada_em:
+        c.retirada_em = config.agora()
+        c.entregue_por = user.nome or user.username
+        c.retirado_por = retirado_por.strip().upper()
+        registrar_log(db, user, "MODIFICACAO", "Correspondência entregue", f"{c.destinatario} ({c.bloco_apto})")
+        db.commit()
+    return RedirectResponse(request.headers.get("referer") or "/correspondencias", status_code=303)
+
+
+@app.post("/correspondencias/{cid}/avisar")
+def correspondencia_avisar(cid: int, user: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
+    c = db.get(Correspondencia, cid)
+    if c:
+        c.avisado_em = config.agora()
+        registrar_log(db, user, "MODIFICACAO", "Morador avisado (WhatsApp)", f"{c.destinatario} ({c.bloco_apto})")
+        db.commit()
+    return {"ok": True}
+
+
+@app.post("/correspondencias/{cid}/excluir")
+def correspondencia_excluir(cid: int, user: Usuario = Depends(admin_requerido), db: Session = Depends(get_db)):
+    c = db.get(Correspondencia, cid)
+    if c:
+        registrar_log(db, user, "MODIFICACAO", "Correspondência excluída", f"{c.destinatario} ({c.bloco_apto})")
+        db.delete(c)
+        db.commit()
+    return RedirectResponse("/correspondencias", status_code=303)
 
 
 # --------------------------------------------------------------- atualizações
