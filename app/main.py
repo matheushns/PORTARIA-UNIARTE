@@ -602,11 +602,9 @@ def link_whats(telefone: str, mensagem: str = "") -> str:
 
 
 def msg_correspondencia(c: Correspondencia) -> str:
-    primeiro = (c.destinatario or "").split(" ")[0].capitalize() if c.destinatario else ""
-    produto = f" ({c.descricao.strip()})" if c.descricao and c.descricao.strip() else ""
-    origem = f" da {c.origem}" if c.origem and c.origem not in ("Outros",) else ""
-    return (f"Oi{', ' + primeiro if primeiro else ''}! Seu produto{origem}{produto} chegou na portaria. "
-            f"Pode retirar quando quiser. Obrigado!")
+    produto = f" {c.descricao.strip()}" if c.descricao and c.descricao.strip() else ""
+    loja = f" do {c.origem.strip()}" if c.origem and c.origem.strip() else ""
+    return f"Oi, seu produto{produto}{loja} chegou na portaria!"
 
 
 def dias_pendente(c: Correspondencia) -> int:
