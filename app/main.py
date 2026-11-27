@@ -219,8 +219,21 @@ def painel(request: Request, user: Usuario = Depends(usuario_atual), db: Session
     dentro = db.scalars(select(Registro).where(Registro.saida.is_(None), Registro.tipo != "ENTREGA")
                         .order_by(Registro.entrada.desc()).limit(50)).all()
     ultimos = db.scalars(select(Registro).order_by(Registro.entrada.desc()).limit(10)).all()
+    agora = config.agora()
+    pend = Correspondencia.retirada_em.is_(None)
+    corresp = {
+        "pendentes": db.scalar(select(func.count(Correspondencia.id)).where(pend)) or 0,
+        "recebidas_hoje": db.scalar(select(func.count(Correspondencia.id)).where(Correspondencia.recebida_em >= hoje)) or 0,
+        "entregues_hoje": db.scalar(select(func.count(Correspondencia.id)).where(Correspondencia.retirada_em >= hoje)) or 0,
+        "atrasadas": db.scalar(select(func.count(Correspondencia.id)).where(
+            pend, Correspondencia.recebida_em < agora - timedelta(days=7))) or 0,
+        "sem_aviso": db.scalar(select(func.count(Correspondencia.id)).where(
+            pend, Correspondencia.avisado_em.is_(None))) or 0,
+        "lista": db.scalars(select(Correspondencia).where(pend)
+                            .order_by(Correspondencia.recebida_em.asc()).limit(6)).all(),
+    }
     return render(request, "painel.html", user, por_tipo=por_tipo, dentro=dentro, ultimos=ultimos,
-                  total_unidades=db.scalar(select(func.count(Unidade.id))),
+                  total_unidades=db.scalar(select(func.count(Unidade.id))), corresp=corresp,
                   total_hoje=sum(por_tipo.values()), pagina="painel")
 
 

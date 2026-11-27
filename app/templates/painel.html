@@ -9,6 +9,7 @@
     <a href="/registros/novo?tipo=VISITANTE" class="btn btn-primary"><i class="bi bi-person-plus-fill me-1"></i> Visitante</a>
     <a href="/registros/novo?tipo=PRESTADOR" class="btn btn-outline-primary"><i class="bi bi-tools me-1"></i> Prestador</a>
     <a href="/registros/novo?tipo=ENTREGA" class="btn btn-outline-primary"><i class="bi bi-box-seam me-1"></i> Entrega</a>
+    <a href="/correspondencias/nova" class="btn btn-outline-primary"><i class="bi bi-envelope-paper me-1"></i> Encomenda</a>
   </div>
 </div>
 
@@ -88,6 +89,55 @@
         </li>{% else %}<li class="list-group-item text-muted py-4 text-center">Sem registros.</li>{% endfor %}
       </ul>
     </div>
+  </div>
+</div>
+
+<div class="card mt-3" id="widget-correspondencia">
+  <div class="card-header bg-white fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+    <span><i class="bi bi-box-seam text-warning me-1"></i> Correspondência
+      {% if corresp.atrasadas %}<span class="badge text-bg-danger ms-1" title="Encomendas paradas há 7 dias ou mais"><i class="bi bi-exclamation-triangle-fill"></i> {{ corresp.atrasadas }} parada{{ 's' if corresp.atrasadas > 1 }} há 7+ dias</span>{% endif %}
+    </span>
+    <span class="d-flex gap-2">
+      <a href="/correspondencias/nova" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Nova encomenda</a>
+      <a href="/correspondencias" class="btn btn-sm btn-outline-secondary">Ver todas</a>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 text-center mb-3">
+      <div class="col-6 col-md-3"><a href="/correspondencias" class="text-decoration-none text-reset"><div class="stat text-warning-emphasis">{{ corresp.pendentes }}</div><div class="small text-muted">Aguardando retirada</div></a></div>
+      <div class="col-6 col-md-3"><div class="stat">{{ corresp.recebidas_hoje }}</div><div class="small text-muted">Recebidas hoje</div></div>
+      <div class="col-6 col-md-3"><div class="stat text-success">{{ corresp.entregues_hoje }}</div><div class="small text-muted">Entregues hoje</div></div>
+      <div class="col-6 col-md-3"><div class="stat {{ 'text-danger' if corresp.sem_aviso else 'text-muted' }}">{{ corresp.sem_aviso }}</div><div class="small text-muted">Moradores ainda não avisados</div></div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead><tr><th>Recebida</th><th>Apto</th><th>Destinatário</th><th>Encomenda</th><th>Situação</th><th class="text-end"></th></tr></thead>
+        <tbody>
+        {% for c in corresp.lista %}
+        {% set wa = link_whats(c.telefone, msg_correspondencia(c)) %}
+        {% set dias = dias_pendente(c) %}
+        <tr>
+          <td class="text-nowrap">{{ c.recebida_em.strftime('%d/%m %H:%M') }}</td>
+          <td>{% if c.bloco_apto %}<a href="#" data-unidade="{{ c.bloco_apto }}" class="fw-semibold text-decoration-none" title="Ver informações da unidade">{{ c.bloco_apto }}</a>{% else %}—{% endif %}</td>
+          <td class="fw-medium">{{ c.destinatario or '—' }}</td>
+          <td class="small">{{ c.descricao or '—' }}{% if c.origem %} <span class="badge text-bg-info">{{ c.origem }}</span>{% endif %}</td>
+          <td class="text-nowrap">
+            <span class="badge {{ 'text-bg-danger' if dias >= 7 else 'text-bg-warning' }}">{{ 'Hoje' if dias == 0 else ('há ' ~ dias ~ ' dia' ~ ('s' if dias > 1 else '')) }}</span>
+            {% if c.avisado_em %}<i class="bi bi-whatsapp text-success" title="Avisado em {{ c.avisado_em.strftime('%d/%m %H:%M') }}"></i>{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if wa %}<a href="{{ wa }}" target="_blank" rel="noopener" class="btn btn-sm btn-success py-0" title="Avisar o morador no WhatsApp" onclick="fetch('/correspondencias/{{ c.id }}/avisar',{method:'POST'})"><i class="bi bi-whatsapp"></i></a>
+            {% else %}<span class="btn btn-sm btn-outline-secondary py-0 disabled" title="Sem celular válido para WhatsApp"><i class="bi bi-whatsapp"></i></span>{% endif %}
+            <form method="post" action="/correspondencias/{{ c.id }}/retirar" class="d-inline" data-confirm="Confirmar a entrega da encomenda de {{ c.destinatario }}?" data-confirm-btn="Registrar entrega"><button class="btn btn-sm btn-primary py-0" title="Registrar entrega ao morador"><i class="bi bi-box-arrow-right"></i> Entregar</button></form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-check2-circle text-success"></i> Nenhuma encomenda aguardando retirada.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if corresp.pendentes > corresp.lista|length %}<div class="small text-muted mt-2">Mostrando as {{ corresp.lista|length }} mais antigas de {{ corresp.pendentes }}. <a href="/correspondencias">Ver todas</a></div>{% endif %}
   </div>
 </div>
 
