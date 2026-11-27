@@ -59,16 +59,19 @@ document.getElementById('codigo_barras').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('origem').focus(); }
 });
 
-inpDest.addEventListener('input', () => {
-  const t = pessoasUnidade[inpDest.value.trim().toUpperCase()];
-  if (t !== undefined && t && !inpTel.value.trim()) inpTel.value = t, inpTel.dispatchEvent(new Event('input'));
-});
+function preenche(nome, tel) {
+  inpDest.value = (nome || '').toUpperCase();
+  inpTel.value = tel || '';
+  inpTel.dispatchEvent(new Event('input'));   // reaplica máscara
+  inpDest.dispatchEvent(new Event('change'));
+}
+// Escolher/digitar um morador da lista também traz o telefone dele.
 inpDest.addEventListener('change', () => {
-  const t = pessoasUnidade[inpDest.value.trim().toUpperCase()];
-  if (t) { inpTel.value = t; inpTel.dispatchEvent(new Event('input')); }
+  const p = pessoasUnidade[inpDest.value.trim().toUpperCase()];
+  if (p && p.tel) { inpTel.value = p.tel; inpTel.dispatchEvent(new Event('input')); }
 });
 
-async function consulta() {
+async function consulta(inicial) {
   const minha = ++seqConsulta;
   const v = campoApto.value.trim();
   dlMor.innerHTML = ''; pessoasUnidade = {};
@@ -84,18 +87,54 @@ async function consulta() {
     const r = await fetch('/api/unidade/' + encodeURIComponent(v));
     const d = await r.json();
     if (minha !== seqConsulta) return;
-    if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada. Digite o nome do destinatário manualmente.'; return; }
+    if (!d.encontrada) { info.className = 'alert alert-warning py-2 mb-0'; info.textContent = 'Unidade não cadastrada. Digite o nome e o telefone do destinatário manualmente.'; return; }
     const respNome = d.inquilino ? (d.inquilino_nome || d.proprietario) : d.proprietario;
-    const respTel = d.inquilino ? (d.inquilino_telefone || d.telefone) : d.telefone;
-    const add = (n, t) => { if (!n) return; const k = n.toUpperCase(); if (!(k in pessoasUnidade)) { pessoasUnidade[k] = t || respTel || ''; dlMor.appendChild(new Option(k, k)); } };
-    add(respNome, respTel);
-    if (d.inquilino) add(d.proprietario, d.telefone);
-    d.pessoas.filter(p => p.tipo !== 'DIARISTA').forEach(p => add(p.nome, p.telefone));
-    if (!inpDest.value.trim() && respNome) { inpDest.value = respNome.toUpperCase(); if (respTel && !inpTel.value.trim()) { inpTel.value = respTel; inpTel.dispatchEvent(new Event('input')); } }
+    const respTel = (d.inquilino ? (d.inquilino_telefone || d.telefone) : d.telefone) || '';
+    const respRotulo = d.inquilino ? 'Inquilino' : 'Proprietário';
+    const lista = [];   // {nome, tel, rotulo}
+    const add = (n, t, rot) => {
+      if (!n) return; const k = n.toUpperCase();
+      if (k in pessoasUnidade) return;
+      pessoasUnidade[k] = { tel: t || respTel, rotulo: rot };
+      lista.push({ nome: k, tel: t || respTel, rotulo: rot });
+      dlMor.appendChild(new Option(k, k));
+    };
+    add(respNome, respTel, respRotulo);
+    if (d.inquilino) add(d.proprietario, d.telefone, 'Proprietário');
+    d.pessoas.filter(p => p.tipo !== 'DIARISTA').forEach(p => add(p.nome, p.telefone, p.parentesco || (p.tipo === 'AUTORIZADO' ? 'Autorizado' : 'Morador')));
+
+    // Preenche destinatário e telefone ao trocar de apartamento (ao abrir uma encomenda já salva, mantém o que está gravado).
+    if (!inicial || (!inpDest.value.trim() && !inpTel.value.trim())) preenche(respNome, respTel);
+
+    // Quadro de informações, como no módulo de Acessos
     info.className = 'alert alert-info py-2 mb-0';
-    info.innerHTML = '<a href="#" data-unidade="' + v + '" class="btn btn-sm btn-outline-primary float-end"><i class="bi bi-eye"></i> Ver detalhes</a><b>' +
-      (d.inquilino ? 'Inquilino: ' : 'Proprietário: ') + (respNome || '—') + '</b>' + (d.ativo ? '' : ' <span class="badge text-bg-warning">inativo</span>') +
-      '<br><small>Escolha o destinatário na lista do campo acima (moradores desta unidade).</small>';
+    info.innerHTML = '';
+    const topo = document.createElement('div');
+    const ver = document.createElement('a');
+    ver.href = '#'; ver.dataset.unidade = v; ver.className = 'btn btn-sm btn-outline-primary float-end';
+    ver.innerHTML = '<i class="bi bi-eye"></i> Ver detalhes';
+    const tit = document.createElement('b'); tit.textContent = respRotulo + ': ' + (respNome || '—');
+    topo.append(ver, tit);
+    if (!d.ativo) { const b = document.createElement('span'); b.className = 'badge text-bg-warning ms-1'; b.textContent = 'inativo'; topo.append(b); }
+    info.append(topo);
+    const linha = (txt) => { const el = document.createElement('div'); el.className = 'small'; el.textContent = txt; info.append(el); };
+    const contato = [respTel && ('Tel.: ' + respTel), d.tel_residencial && ('Residencial: ' + d.tel_residencial),
+                     (d.inquilino ? d.inquilino_email : d.email) && ('E-mail: ' + (d.inquilino ? d.inquilino_email : d.email))].filter(Boolean).join(' · ');
+    if (contato) linha(contato);
+    if (d.interfonar && d.interfonar.length) linha('Interfonar: ' + d.interfonar.join(', '));
+    const obs = [d.inquilino ? d.inquilino_observacoes : '', d.observacoes].filter(Boolean).join(' | ');
+    if (obs) linha('Obs.: ' + obs);
+    if (lista.length) {
+      const bx = document.createElement('div'); bx.className = 'mt-2 d-flex flex-wrap gap-1 align-items-center';
+      const l = document.createElement('small'); l.className = 'text-muted me-1'; l.textContent = 'Destinatário:'; bx.append(l);
+      lista.forEach(p => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm btn-outline-secondary py-0';
+        b.textContent = p.nome + (p.rotulo ? ' (' + p.rotulo + ')' : '') + (p.tel ? ' · ' + p.tel : '');
+        b.addEventListener('click', () => preenche(p.nome, p.tel));
+        bx.append(b);
+      });
+      info.append(bx);
+    }
   } catch (e) {
     if (minha !== seqConsulta) return;
     info.className = 'alert alert-danger py-2 mb-0';
@@ -116,7 +155,7 @@ function carregaAptos(bloco, aptoSel) {
 }
 function atualiza() {
   campoApto.value = (selBloco.value && selApto.value) ? selBloco.value + '/' + selApto.value : '';
-  consulta();
+  consulta(false);
 }
 selBloco.addEventListener('change', () => { carregaAptos(selBloco.value, ''); atualiza(); });
 selApto.addEventListener('change', atualiza);
@@ -125,7 +164,7 @@ if (b0) {
   if (!MAPA[b0]) selBloco.add(new Option(b0, b0));
   selBloco.value = b0; carregaAptos(b0, a0);
 }
-consulta();
+consulta(true);
 
 const btnExc = document.getElementById('btn-excluir-corresp');
 if (btnExc) {
