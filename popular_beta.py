@@ -1,4 +1,4 @@
-﻿"""Popula o banco BETA (SQLite local) com moradores FICTÍCIOS para testes.
+"""Popula o banco BETA (SQLite local) com moradores FICTÍCIOS para testes.
 
 Uso (pelo popular_beta.bat): só roda em modo BETA com SQLite; nunca toca o Supabase.
 Cada execução ADICIONA mais unidades fictícias (as existentes nunca são alteradas).
