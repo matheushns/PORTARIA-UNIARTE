@@ -603,8 +603,8 @@ def link_whats(telefone: str, mensagem: str = "") -> str:
 
 def msg_correspondencia(c: Correspondencia) -> str:
     produto = f" {c.descricao.strip()}" if c.descricao and c.descricao.strip() else ""
-    loja = f" do {c.origem.strip()}" if c.origem and c.origem.strip() else ""
-    return f"Oi, seu produto{produto}{loja} chegou na portaria!"
+    loja = f" da {c.origem.strip()}" if c.origem and c.origem.strip() else ""
+    return f"Oi, sua encomenda{produto}{loja} chegou na portaria!"
 
 
 def dias_pendente(c: Correspondencia) -> int:
